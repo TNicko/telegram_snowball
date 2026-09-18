@@ -1,9 +1,11 @@
 <div align="center">
 
-# <img src="client/src/assets/snowball-icon.png" alt="" width="36" height="36"> Telegram Snowball
+<h1>
+  <img src="client/src/assets/snowball-icon.png" alt="" width="36" height="36" align="absmiddle" style="vertical-align: middle;"> Telegram Snowball
+</h1>
 
-**A local-first collector and media analysis workbench.**<br>
-Start from a Telegram account you control, then snowball through native forward metadata.
+**A telegram scraper and media analysis workbench.**<br>
+Crawl  -  Collect  -  Process  -  Analyse
 
 <p>
   <a href="#quick-start"><img src="https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose"></a>
