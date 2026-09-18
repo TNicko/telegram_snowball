@@ -1,8 +1,16 @@
-# <img src="client/src/assets/snowball-icon.png" alt="" width="32" height="32"> Telegram Snowball
+<div align="center">
 
-Local-first open source collector and media analysis workbench for researchers and investigators. Start from a Telegram account you control, import its dialogues, then snowball through native forward metadata.
+# <img src="client/src/assets/snowball-icon.png" alt="" width="36" height="36"> Telegram Snowball
 
-Licensed under [Apache License 2.0](LICENSE).
+**A local-first collector and media analysis workbench.**<br>
+Start from a Telegram account you control, then snowball through native forward metadata.
+
+<p>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="Apache License 2.0"></a>
+</p>
+
+</div>
 
 ## What it is
 
