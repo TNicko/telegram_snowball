@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=82.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telegram-snowball"
+version = "0.1.0"
+description = "Local-first Telegram snowball collector and media analysis workbench."
+license = { text = "Apache-2.0" }
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.2.2",
+    "psycopg[binary]>=3.2.0",
+    "telethon>=1.43.2,<1.44",
+    "cryptography>=44.0.0",
+    "pgvector>=0.3.6",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy", "pytest", "pytest-asyncio"]
+
+[project.scripts]
+snowball-api = "telegram_snowball.api.main:run"
+snowball-worker = "telegram_snowball.worker.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["telegram_snowball*"]
+
+[tool.setuptools.package-data]
+telegram_snowball = ["schema.sql"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

@@ -1,0 +1,65 @@
+.bar { width: 100%; margin-bottom: 1.15rem; }
+.barFlush { margin-bottom: 0; }
+.barOpen { margin-bottom: 0; }
+.composer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  border-radius: 16px;
+  background: var(--elevated);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  padding: 0.35rem 0.4rem 0.35rem 0.85rem;
+}
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--text) 28%, transparent);
+}
+.composerOpen {
+  border-radius: 16px 16px 0 0;
+  box-shadow: none;
+}
+.composerOpen:focus-within {
+  border-bottom-color: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.results {
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  background: var(--elevated);
+  overflow: hidden;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  padding: 0.45rem 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.input:focus { outline: none; }
+.input::placeholder { color: color-mix(in srgb, var(--text) 38%, transparent); }
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 9999px;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.iconBtn:hover { opacity: 0.88; }
+.iconSvg { width: 16px; height: 16px; display: block; }

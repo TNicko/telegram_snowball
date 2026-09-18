@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-snowball}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-snowball}
+      POSTGRES_DB: ${POSTGRES_DB:-snowball}
+    volumes:
+      - snowball_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  api:
+    image: telegram-snowball-api
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment: &snowball-env
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-snowball}:${POSTGRES_PASSWORD:-snowball}@postgres:5432/${POSTGRES_DB:-snowball}
+      SNOWBALL_DATA_DIR: /data
+      SNOWBALL_BIND: 0.0.0.0
+      SNOWBALL_API_PORT: "8000"
+      SNOWBALL_SECRET_KEY: ${SNOWBALL_SECRET_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+    init: true
+    restart: unless-stopped
+
+  worker:
+    image: telegram-snowball-api
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "telegram_snowball.worker"]
+    environment: *snowball-env
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${SNOWBALL_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    restart: unless-stopped
+
+volumes:
+  snowball_pg:
