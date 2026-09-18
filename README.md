@@ -1,4 +1,4 @@
-# Telegram Snowball
+# <img src="client/src/assets/snowball-icon.png" alt="" width="32" height="32"> Telegram Snowball
 
 Local-first open source collector and media analysis workbench for researchers and investigators. Start from a Telegram account you control, import its dialogues, then snowball through native forward metadata.
 
