@@ -32,9 +32,10 @@ export default function CatalogPage() {
 }
 
 function CatalogPeersPage() {
-  const { peers, error, running, loaded } = useDialogueSync()
+  const { peers, error, running, loaded, ready } = useDialogueSync()
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
+  const loadingList = !ready && peers.length === 0
 
   const visible = useMemo(() => {
     return peers
@@ -57,7 +58,7 @@ function CatalogPeersPage() {
           setQuery(value)
         }}
         onSearch={setQuery}
-        isLoading={running}
+        isLoading={running || loadingList}
       />
       {running ? (
         <p>
@@ -70,12 +71,9 @@ function CatalogPeersPage() {
       <CatalogPeerTable
         peers={visible}
         totalCount={query ? visible.length : peers.length}
+        loading={loadingList}
         emptyMessage={
-          peers.length === 0
-            ? running
-              ? 'Loading peers…'
-              : 'No peers in this account yet.'
-            : 'No peers match that search.'
+          peers.length === 0 ? 'No peers in this account yet.' : 'No peers match that search.'
         }
       />
     </div>

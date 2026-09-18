@@ -127,74 +127,86 @@ export default function HomePage() {
         </section>
       </div>
 
-      <h1 className="pageTitle">Operations</h1>
-      <p className="lede">
-        Start a forward snowball from a seed peer. Embedding is on by default; the job will not
-        start unless those models are healthy. Toggle image or text embedding off to scrape without
-        them.
-      </p>
-      {dialoguesRunning ? (
-        <p>
-          <LoadingText>
-            {dialoguesLoaded > 0
-              ? `Loading dialogues · ${dialoguesLoaded} so far`
-              : 'Loading dialogues'}
-          </LoadingText>
-        </p>
-      ) : null}
-
-      {status?.active_job ? (
-        <p className="muted">
-          Active job: {status.active_job.task_type} ({status.active_job.status}){' '}
-          <Link to={`/jobs/${status.active_job.id}`}>Open</Link>
-        </p>
-      ) : null}
-
-      <div className="card" style={{ marginTop: '1.25rem' }}>
-        <h3>Forward snowball</h3>
-        <p className="muted">Username or peer id of the source community.</p>
-        <CatalogSearchBar
-          query={query}
-          onQueryChange={(value) => {
-            setQuery(value)
-            if (hit) setHit(null)
-          }}
-          onSearch={(value) => void search(value)}
-          isLoading={searching}
-          placeholder="Search by @username or peer id"
-          ariaLabel="Search seed peer"
-          flush
-          results={
-            hit ? (
-              <button
-                className={h.hit}
-                type="button"
-                role="option"
-                aria-selected="true"
-                onClick={() => setModalOpen(true)}
-              >
-                <PeerAvatar peer={hit} />
-                <span className={h.hitBody}>
-                  <span className={h.hitTitle}>
-                    {hit.title ?? (hit.username ? `@${hit.username}` : String(hit.external_id))}
+      <section className={h.crawl}>
+        <h1 className={h.crawlTitle}>Begin Telegram Crawling</h1>
+        {dialoguesRunning ? (
+          <p>
+            <LoadingText>
+              {dialoguesLoaded > 0
+                ? `Loading dialogues · ${dialoguesLoaded} so far`
+                : 'Loading dialogues'}
+            </LoadingText>
+          </p>
+        ) : null}
+        {status?.active_job ? (
+          <p className="muted">
+            Active job: {status.active_job.task_type} ({status.active_job.status}){' '}
+            <Link to={`/jobs/${status.active_job.id}`}>Open</Link>
+          </p>
+        ) : null}
+        <div className={h.crawlSearch}>
+          <CatalogSearchBar
+            query={query}
+            onQueryChange={(value) => {
+              setQuery(value)
+              if (hit) setHit(null)
+            }}
+            onSearch={(value) => void search(value)}
+            isLoading={searching}
+            placeholder="Search by @username or peer id"
+            ariaLabel="Search seed peer"
+            flush
+            results={
+              hit ? (
+                <button
+                  className={h.hit}
+                  type="button"
+                  role="option"
+                  aria-selected="true"
+                  onClick={() => setModalOpen(true)}
+                >
+                  <PeerAvatar peer={hit} />
+                  <span className={h.hitBody}>
+                    <span className={h.hitTitle}>
+                      {hit.title ?? (hit.username ? `@${hit.username}` : String(hit.external_id))}
+                    </span>
+                    <span className={h.hitMeta}>
+                      {peerTypeLabel(hit.peer_type)}
+                      {hit.username ? ` · @${hit.username}` : ''}
+                    </span>
                   </span>
-                  <span className={h.hitMeta}>
-                    {peerTypeLabel(hit.peer_type)}
-                    {hit.username ? ` · @${hit.username}` : ''}
-                  </span>
-                </span>
-              </button>
-            ) : null
-          }
-        />
-      </div>
-
-      {error ? <p className="error">{error}</p> : null}
+                </button>
+              ) : null
+            }
+          />
+        </div>
+        {error ? <p className="error">{error}</p> : null}
+        <aside className={h.note}>
+          A forward snowball starts at one <strong>source peer</strong> — a channel, group, or user
+          this account can already see. It scrapes that peer’s messages, then follows native Telegram
+          forward metadata into the communities those posts came from, and keeps expanding from
+          there. Image and text embedding stay on unless you turn them off; those models must be
+          ready to start.
+        </aside>
+      </section>
 
       {modalOpen && hit ? (
         <div className="modalScrim" onClick={() => setModalOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Snowball {hit.title ?? hit.username}</h3>
+            <h3 className={h.modalTitle}>Begin snowballing</h3>
+            <div className={h.seed}>
+              <PeerAvatar peer={hit} />
+              <span className={h.hitBody}>
+                <span className={h.hitTitle}>
+                  {(hit.title ?? '').trim() ||
+                    (hit.username ? `@${hit.username}` : String(hit.external_id))}
+                </span>
+                <span className={h.hitMeta}>
+                  {peerTypeLabel(hit.peer_type)}
+                  {hit.username ? ` · @${hit.username}` : ''}
+                </span>
+              </span>
+            </div>
             <p className="muted">
               First/last message probe (created date, latest message id) will land in the next pass.
               Messages are always scraped.

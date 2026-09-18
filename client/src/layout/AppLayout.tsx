@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router'
 import brandIcon from '../assets/snowball-icon.png'
 import { AccountAvatar } from '../components/AccountAvatar'
+import { useDialogueSync } from '../hooks/useDialogueSync'
 import { accountDisplayName } from '../lib/account'
 import { useAppStatus } from './statusContext'
 
@@ -33,6 +34,7 @@ export function AppLayout() {
   const status = useAppStatus()
   const account = status?.account ?? null
   const accountName = account ? accountDisplayName(account) : null
+  useDialogueSync()
 
   return (
     <div className="shell">

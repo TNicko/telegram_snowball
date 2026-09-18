@@ -1,5 +1,6 @@
 import type { MediaBucket, Peer } from '../lib/api'
 import { formatAddedAt, formatMaxMediaBytes, peerTypeLabel } from '../lib/peer'
+import { LoadingText } from './LoadingText'
 import { PeerAvatar } from './PeerAvatar'
 import t from './CatalogPeerTable.module.css'
 
@@ -60,19 +61,29 @@ export function CatalogPeerTable({
   peers,
   totalCount,
   emptyMessage,
+  loading = false,
 }: {
   peers: Peer[]
   totalCount: number
   emptyMessage?: string
+  loading?: boolean
 }) {
   return (
     <div className={t.table} role="table" aria-label="Peer catalog">
-      <div className={`${t.toolbar}${totalCount === 0 ? ` ${t.toolbarEmpty}` : ''}`}>
+      <div className={`${t.toolbar}${loading || totalCount === 0 ? ` ${t.toolbarEmpty}` : ''}`}>
         <span className={t.toolbarTitle}>
-          {totalCount.toLocaleString()} {totalCount === 1 ? 'peer' : 'peers'}
+          {loading ? (
+            <LoadingText>Loading peers</LoadingText>
+          ) : (
+            `${totalCount.toLocaleString()} ${totalCount === 1 ? 'peer' : 'peers'}`
+          )}
         </span>
       </div>
-      {peers.length === 0 ? (
+      {loading ? (
+        <p className={t.empty} role="status">
+          <LoadingText>Loading peers</LoadingText>
+        </p>
+      ) : peers.length === 0 ? (
         <p className={t.empty} role="status">
           {emptyMessage ?? 'No peers match that search.'}
         </p>
