@@ -91,10 +91,6 @@ cd ../client && npm install && npm run dev
 
 Investigators can keep using `docker compose up`.
 
-## Legal / use
-
-Use this only on accounts you control, and only on dialogues that account can already access. Telegram’s terms apply. Do not use this to collect or retain CSAM; known-illegal material should be hashed and reported, never displayed, never kept.
-
 ## Status
 
 Early scaffolding. Collection, catalogs, graphs, and local embedding models are being built in phases.
