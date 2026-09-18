@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="client/src/assets/snowball-icon.png" alt="" width="36" height="36" align="absmiddle" style="vertical-align: middle;"> Telegram Snowball
+  <img src="client/src/assets/snowball-icon-readme.png" alt="" width="36" height="42" align="absmiddle"> Telegram Snowball
 </h1>
 
 **A telegram scraper and media analysis workbench.**<br>
