@@ -36,6 +36,14 @@ async def apply_schema(conn: psycopg.AsyncConnection[Any]) -> None:
     sql = files("telegram_snowball").joinpath("schema.sql").read_text(encoding="utf-8")
     await conn.execute(sql)
     await conn.commit()
+    from telegram_snowball.telegram.forwards import backfill_forward_tables
+
+    await backfill_forward_tables(conn)
+    await conn.commit()
+    from telegram_snowball.catalog import backfill_stored_media_kinds
+
+    await backfill_stored_media_kinds(conn)
+    await conn.commit()
 
 
 @asynccontextmanager

@@ -20,7 +20,7 @@ Crawl  -  Collect  -  Process  -  Analyse
 - **One worker**, **one Telegram session**, **one job at a time**
 - Postgres (pgvector) for messages, peers, jobs, and graph edges
 - Media, models, and the session secret on a `./data` volume
-- Forward snowball with live progress; catalogs and graphs coming next
+- Forward snowball with live progress, catalogs, graphs, pHash, and local text/image embeddings
 
 It is not a hosted SaaS, not a harvester fleet, and not a scrape of chats you cannot already see. **No NVIDIA/GPU is required to boot.**
 
@@ -56,16 +56,22 @@ Data that survives restart:
 
 Stop with Ctrl+C, or `docker compose down`. Add `-v` only if you want to wipe the database volume.
 
-## Snowball embedding gate
+## Snowball embedding
 
-Forward snowball jobs default to **embed images** and **embed text** both on. If a toggle is on, that model must be healthy or the job is rejected. Turn a toggle off to scrape without that embedder. Hashing always runs on downloaded media. Dialogue import is not gated on embeddings.
+Forward snowball jobs default to **embed images** and **embed text** both on. If a toggle is on, that model must be downloaded (READY + weight files under `data/models/<id>/`) or the job is rejected. Turn a toggle off to scrape without embedding.
 
-v1 does not download GPU models at boot. Until real weights are wired, you can mark a model ready on the data volume:
+After scrape, the worker encodes:
 
-```bash
-mkdir -p data/models/siglip2-base-patch16-256 data/models/bge-m3
-touch data/models/siglip2-base-patch16-256/READY data/models/bge-m3/READY
-```
+- **Message text** with the selected text model (E5 / BGE) into a message-to-message space
+- **Images on disk** (persisted or still in the image cache) with the selected vision model
+
+CLIP and SigLIP also encode **text queries in the vision space** (text-to-image). MobileNet is image-only. **Do not mix E5 vectors with SigLIP vectors** — they are different spaces.
+
+Catalog → Messages / Images has a **Meaning** search once the matching model is ready and vectors exist. Per-peer **Embed remainder** in the peer coverage modal backfills rows that were scraped before models were ready. Image embedding needs the pixels: hash-only images with no file on disk are skipped.
+
+The Home **Models** cards open a picker. Defaults are **SigLIP2 Base** (vision) and **E5 Small multilingual** (message text). Captions are off unless you install BLIP (captioning is not wired yet).
+
+Downloads go to `data/models/<id>/` via a worker job (one job at a time). Switching the selected text or vision model clears stored vectors for that slot so they are not compared across models.
 
 ## Contributor install (optional)
 
@@ -84,13 +90,16 @@ Use a host venv only if you are changing the Python or Vite code without Docker:
 ```bash
 docker compose up -d postgres
 cd backend && python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+pytest
 uvicorn telegram_snowball.api.main:app --reload --host 127.0.0.1 --port 8000
 python -m telegram_snowball.worker
 cd ../client && npm install && npm run dev
 ```
 
+Embedding inference in the Compose image uses CPU PyTorch. A host venv needs `pip install -e ".[embed]"` plus a CPU/GPU torch wheel if you run the worker outside Docker.
+
 Investigators can keep using `docker compose up`.
 
 ## Status
 
-Early scaffolding. Collection, catalogs, graphs, and local embedding models are being built in phases.
+Local collector and analysis workbench: scrape, catalogs, forward/shared-image graphs, pHash, and on-device text/image embeddings. Captions (BLIP) can be downloaded but are not generated yet.

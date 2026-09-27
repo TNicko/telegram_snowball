@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import placeholder from '../assets/user-placeholder.svg?url'
+import { ImageSkeleton, useMediaReady } from './ImageSkeleton'
+import sk from './ImageSkeleton.module.css'
 
 type Size = 'sm' | 'md'
 type MediaKind = 'image' | 'video' | null | undefined
@@ -15,29 +17,35 @@ export function AccountAvatar({
   name: string
   size?: Size
 }) {
-  const [failed, setFailed] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const remote = Boolean(photoUrl)
+  const { failed, loading, onReady, onFailed, imgRef, videoRef } = useMediaReady(photoUrl)
+  const playRef = useRef<HTMLVideoElement>(null)
   const isVideo = mediaKind === 'video'
-
-  useEffect(() => {
-    setFailed(false)
-  }, [photoUrl, mediaKind])
+  const showVideo = remote && !failed && isVideo
+  const src = photoUrl && !failed ? photoUrl : placeholder
+  const showSkeleton = remote && loading
 
   useEffect(() => {
     if (!photoUrl || failed || !isVideo) return
-    const video = videoRef.current
+    const video = playRef.current
     if (!video) return
     void video.play().catch(() => undefined)
   }, [photoUrl, failed, isVideo])
 
-  const src = photoUrl && !failed ? photoUrl : placeholder
-  const showVideo = Boolean(photoUrl) && !failed && isVideo
+  const setVideoRef = (el: HTMLVideoElement | null) => {
+    playRef.current = el
+    videoRef(el)
+  }
 
   return (
-    <div className={`accountAvatar accountAvatar-${size}`}>
+    <div
+      className={`accountAvatar accountAvatar-${size} ${sk.face}`}
+      data-loading={showSkeleton || undefined}
+    >
+      {showSkeleton ? <ImageSkeleton label="Loading photo" /> : null}
       {showVideo ? (
         <video
-          ref={videoRef}
+          ref={setVideoRef}
           src={src}
           autoPlay
           muted
@@ -46,10 +54,17 @@ export function AccountAvatar({
           disablePictureInPicture
           preload="auto"
           aria-label={name}
-          onError={() => setFailed(true)}
+          onLoadedData={onReady}
+          onError={onFailed}
         />
       ) : (
-        <img src={src} alt={name} onError={() => setFailed(true)} />
+        <img
+          ref={remote && !failed ? imgRef : undefined}
+          src={src}
+          alt={name}
+          onLoad={remote && !failed ? onReady : undefined}
+          onError={onFailed}
+        />
       )}
     </div>
   )

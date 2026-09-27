@@ -7,7 +7,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import apply_schema, connect_with_retry
-from telegram_snowball.api.routes import dialogues, jobs, models, setup, status
+from telegram_snowball.api.routes import (
+    catalog_stats,
+    dialogues,
+    export,
+    files,
+    graph,
+    images,
+    jobs,
+    messages,
+    models,
+    search,
+    setup,
+    status,
+    videos,
+)
 
 
 @asynccontextmanager
@@ -38,10 +52,18 @@ app.add_middleware(
 )
 
 app.include_router(status.router, prefix="/api")
+app.include_router(catalog_stats.router, prefix="/api")
 app.include_router(setup.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(dialogues.router, prefix="/api")
+app.include_router(messages.router, prefix="/api")
+app.include_router(images.router, prefix="/api")
+app.include_router(videos.router, prefix="/api")
+app.include_router(files.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
+app.include_router(graph.router, prefix="/api")
+app.include_router(search.router, prefix="/api")
 
 
 def run() -> None:

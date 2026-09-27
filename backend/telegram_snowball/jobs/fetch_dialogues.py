@@ -6,14 +6,16 @@ from uuid import UUID
 
 from psycopg.types.json import Jsonb
 from telethon.errors import ChannelPrivateError, ChatForbiddenError, FloodWaitError
-from telethon.tl.types import Message
+from telethon.tl.types import Message, MessageService
 
 from telegram_snowball.config import Settings
 from telegram_snowball.jobs.progress import update_job_progress
+from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.telegram.client import telegram_client
-from telegram_snowball.telegram.ids import to_signed_peer_id
 from telegram_snowball.telegram.coverage import refresh_fetch_coverage
-from telegram_snowball.telegram.media_kinds import classify_message_media
+from telegram_snowball.telegram.ids import to_signed_peer_id
+from telegram_snowball.telegram.materialize import entity_label, materialize_peer, refresh_connected_account
+from telegram_snowball.telegram.media_kinds import classify_message_media, media_kind_from_stored
 
 lg = logging.getLogger(__name__)
 
@@ -26,17 +28,20 @@ async def _sleep_flood(err: FloodWaitError) -> None:
     await asyncio.sleep(seconds + 1)
 
 
-async def _persist_message(conn: Any, *, peer_id: int, message: Message) -> None:
+async def _persist_message(
+    conn: Any, *, peer_id: int, message: Message | MessageService
+) -> tuple[UUID, str, dict[str, Any] | None, bool] | None:
+    """Store a message. Returns (id, media kind, stored media, inserted) or None if skipped."""
     if not getattr(message, "id", None):
-        return
-    date = message.date
-    content = message.message or None
+        return None
+    date = getattr(message, "date", None)
+    content = getattr(message, "message", None) or None
     from_id = to_signed_peer_id(getattr(message, "from_id", None) or getattr(message, "sender_id", None))
     fwd = None
-    if message.fwd_from is not None:
+    if getattr(message, "fwd_from", None) is not None:
         fwd = message.fwd_from.to_dict()
-    media = classify_message_media(message.media)
-    await conn.execute(
+    media = classify_message_media(getattr(message, "media", None))
+    row = await conn.execute(
         """
         INSERT INTO messages (
             peer_external_id, telegram_message_id, date, content,
@@ -46,7 +51,13 @@ async def _persist_message(conn: Any, *, peer_id: int, message: Message) -> None
         ON CONFLICT (peer_external_id, telegram_message_id) DO UPDATE SET
             content = EXCLUDED.content,
             fwd_from = COALESCE(EXCLUDED.fwd_from, messages.fwd_from),
-            media = COALESCE(EXCLUDED.media, messages.media)
+            media = jsonb_set(
+                COALESCE(EXCLUDED.media, '{}'::jsonb)
+                    || COALESCE(messages.media, '{}'::jsonb),
+                '{kind}',
+                COALESCE(EXCLUDED.media->'kind', messages.media->'kind')
+            )
+        RETURNING id, media, (xmax = 0) AS inserted
         """,
         (
             peer_id,
@@ -54,10 +65,15 @@ async def _persist_message(conn: Any, *, peer_id: int, message: Message) -> None
             date,
             content,
             from_id,
-            Jsonb(fwd) if fwd is not None else None,
-            Jsonb(media) if media is not None else None,
+            Jsonb(json_safe(fwd)) if fwd is not None else None,
+            Jsonb(json_safe(media)) if media is not None else None,
         ),
     )
+    stored = await row.fetchone()
+    if stored is None:
+        return None
+    stored_media = stored["media"] if isinstance(stored["media"], dict) else media
+    return stored["id"], media_kind_from_stored(stored_media) or "", stored_media, bool(stored["inserted"])
 
 
 async def run_fetch_dialogues(

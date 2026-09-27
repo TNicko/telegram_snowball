@@ -81,6 +81,46 @@ CREATE INDEX IF NOT EXISTS peers_updated_idx ON peers (updated_at DESC);
 CREATE INDEX IF NOT EXISTS peers_created_idx ON peers (created_at DESC);
 
 ALTER TABLE peers ADD COLUMN IF NOT EXISTS photo_media_kind TEXT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS usernames JSONB;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS last_name TEXT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS telegram_date TIMESTAMPTZ;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS verified BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS scam BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS fake BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS restricted BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS restriction_reason JSONB;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS noforwards BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS forum BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS gigagroup BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS join_to_send BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS join_request BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS has_link BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS has_geo BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS deleted BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS premium BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS deactivated BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS linked_chat_id BIGINT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS linked_monoforum_id BIGINT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS migrated_from_chat_id BIGINT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS migrated_to_channel_id BIGINT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS slowmode_enabled BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS slowmode_seconds INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS hidden_prehistory BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS available_min_id INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS participants_hidden BOOLEAN;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS admins_count INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS kicked_count INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS banned_count INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS online_count INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS ttl_period INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS pinned_msg_id INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS location_address TEXT;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS location_lat DOUBLE PRECISION;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS location_lng DOUBLE PRECISION;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS common_chats_count INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS first_message_id INTEGER;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS first_message_at TIMESTAMPTZ;
 
 UPDATE telegram_accounts a
 SET photo_path = p.photo_path
@@ -107,6 +147,9 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_embedded BOOLEAN NOT NULL DE
 CREATE INDEX IF NOT EXISTS messages_peer_date_idx
     ON messages (peer_external_id, date DESC);
 
+CREATE INDEX IF NOT EXISTS messages_date_idx
+    ON messages (date DESC);
+
 -- Message-history coverage. Missing row → Posts shows "—".
 CREATE TABLE IF NOT EXISTS peer_fetch_coverage (
     peer_external_id BIGINT PRIMARY KEY REFERENCES peers (external_id) ON DELETE CASCADE,
@@ -129,7 +172,131 @@ CREATE TABLE IF NOT EXISTS peer_media_coverage (
 CREATE TABLE IF NOT EXISTS forward_edges (
     from_external_id BIGINT NOT NULL,
     to_external_id BIGINT NOT NULL,
+    from_peer_type TEXT,
+    to_peer_type TEXT,
+    last_from_name TEXT,
     forward_count INTEGER NOT NULL DEFAULT 0,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (from_external_id, to_external_id)
 );
+
+ALTER TABLE forward_edges ADD COLUMN IF NOT EXISTS from_peer_type TEXT;
+ALTER TABLE forward_edges ADD COLUMN IF NOT EXISTS to_peer_type TEXT;
+ALTER TABLE forward_edges ADD COLUMN IF NOT EXISTS last_from_name TEXT;
+ALTER TABLE forward_edges ADD COLUMN IF NOT EXISTS first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+CREATE INDEX IF NOT EXISTS forward_edges_from_count_idx
+    ON forward_edges (from_external_id, forward_count DESC);
+CREATE INDEX IF NOT EXISTS forward_edges_to_count_idx
+    ON forward_edges (to_external_id, forward_count DESC);
+
+-- Fan-out: each forwarded message on a unique (from → to) edge.
+CREATE TABLE IF NOT EXISTS forward_edge_messages (
+    from_external_id BIGINT NOT NULL,
+    to_external_id BIGINT NOT NULL,
+    message_id UUID NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    message_date TIMESTAMPTZ NOT NULL,
+    telegram_message_id INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (from_external_id, to_external_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS forward_edge_messages_from_idx
+    ON forward_edge_messages (from_external_id);
+CREATE INDEX IF NOT EXISTS forward_edge_messages_to_idx
+    ON forward_edge_messages (to_external_id);
+CREATE INDEX IF NOT EXISTS forward_edge_messages_message_idx
+    ON forward_edge_messages (message_id);
+CREATE INDEX IF NOT EXISTS forward_edge_messages_date_idx
+    ON forward_edge_messages (message_date DESC);
+
+-- One row per unique exact 16-hex pHash. Canonical file is never replaced.
+CREATE TABLE IF NOT EXISTS image_blobs (
+    phash TEXT PRIMARY KEY,
+    canonical_path TEXT,
+    refcount INTEGER NOT NULL DEFAULT 1,
+    image_embedded BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT image_blobs_phash_hex_chk CHECK (phash ~ '^[0-9a-f]{16}$'),
+    CONSTRAINT image_blobs_refcount_chk CHECK (refcount >= 0)
+);
+
+-- Fan-out: exact pHash → every message it appeared in.
+CREATE TABLE IF NOT EXISTS image_blob_messages (
+    phash TEXT NOT NULL REFERENCES image_blobs (phash) ON DELETE CASCADE,
+    message_id UUID NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    message_date TIMESTAMPTZ NOT NULL,
+    peer_external_id BIGINT NOT NULL REFERENCES peers (external_id) ON DELETE CASCADE,
+    telegram_message_id INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (phash, message_id),
+    CONSTRAINT image_blob_messages_phash_hex_chk CHECK (phash ~ '^[0-9a-f]{16}$')
+);
+
+CREATE INDEX IF NOT EXISTS image_blob_messages_message_idx
+    ON image_blob_messages (message_id);
+CREATE INDEX IF NOT EXISTS image_blob_messages_peer_idx
+    ON image_blob_messages (peer_external_id);
+CREATE INDEX IF NOT EXISTS image_blob_messages_date_idx
+    ON image_blob_messages (message_date DESC);
+
+ALTER TABLE image_blobs ALTER COLUMN canonical_path DROP NOT NULL;
+
+CREATE TABLE IF NOT EXISTS image_cache (
+    phash TEXT PRIMARY KEY REFERENCES image_blobs (phash) ON DELETE CASCADE,
+    cache_path TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS image_cache_created_idx ON image_cache (created_at ASC);
+
+CREATE INDEX IF NOT EXISTS messages_video_kind_idx
+    ON messages ((media->>'kind'))
+    WHERE media->>'kind' = 'video';
+
+CREATE INDEX IF NOT EXISTS messages_video_document_idx
+    ON messages ((media->>'document_id'))
+    WHERE media->>'kind' = 'video' AND media->>'document_id' IS NOT NULL;
+
+UPDATE image_blob_messages ibm
+SET telegram_message_id = msg.telegram_message_id
+FROM messages msg
+WHERE ibm.message_id = msg.id
+  AND ibm.telegram_message_id IS NULL;
+
+-- Fixed-width pgvector slots. Shorter models are L2-normalized then zero-padded
+-- so cosine order is unchanged. Width covers MobileNet (1280) and BGE-M3 (1024).
+CREATE TABLE IF NOT EXISTS message_text_embeddings (
+    message_id UUID PRIMARY KEY REFERENCES messages (id) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    dim SMALLINT NOT NULL,
+    embedding vector(1280) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS message_text_embeddings_hnsw
+    ON message_text_embeddings USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS message_text_embeddings_model_idx
+    ON message_text_embeddings (model_id);
+
+CREATE TABLE IF NOT EXISTS image_embeddings (
+    phash TEXT PRIMARY KEY REFERENCES image_blobs (phash) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    dim SMALLINT NOT NULL,
+    embedding vector(1280) NOT NULL,
+    CONSTRAINT image_embeddings_phash_hex_chk CHECK (phash ~ '^[0-9a-f]{16}$')
+);
+
+CREATE INDEX IF NOT EXISTS image_embeddings_hnsw
+    ON image_embeddings USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS image_embeddings_model_idx
+    ON image_embeddings (model_id);
+
+CREATE INDEX IF NOT EXISTS messages_text_embed_pending_idx
+    ON messages (peer_external_id)
+    WHERE text_embedded = false AND NULLIF(BTRIM(content), '') IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS image_blobs_embed_pending_idx
+    ON image_blobs (phash)
+    WHERE image_embedded = false;

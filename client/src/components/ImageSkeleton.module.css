@@ -1,0 +1,67 @@
+.face {
+  position: relative;
+  overflow: hidden;
+}
+.face[data-loading] :global(img),
+.face[data-loading] :global(video) {
+  opacity: 0;
+}
+
+.skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--color-border) 72%, transparent);
+  animation: mediaSkeletonBreath 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text-muted) 7%, transparent) 35%,
+    color-mix(in srgb, var(--color-primary) 16%, transparent) 50%,
+    color-mix(in srgb, var(--color-text-muted) 7%, transparent) 65%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  animation: mediaSkeletonShimmer 2s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+}
+
+@keyframes mediaSkeletonBreath {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes mediaSkeletonShimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    opacity: 0.65;
+  }
+
+  .skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+}

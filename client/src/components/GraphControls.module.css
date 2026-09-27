@@ -1,0 +1,246 @@
+.panel {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 4;
+  width: auto;
+  max-width: calc(100% - 1.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-height: calc(100% - 1.7rem);
+  pointer-events: none;
+}
+
+.toolbar,
+.body {
+  pointer-events: auto;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.body {
+  width: min(17.75rem, 100%);
+  margin-top: 0.45rem;
+  overflow: auto;
+  padding: 0.7rem 0.75rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--elevated) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.3rem;
+  height: 1.85rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--elevated) 88%, transparent);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.iconBtn:hover {
+  background: #1c1c1c;
+}
+
+.iconBtnActive {
+  background: #1f1f1f;
+}
+
+.chevron {
+  transition: transform 140ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.section {
+  margin: 0.7rem 0 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.section:first-child {
+  margin-top: 0;
+}
+
+.presetSelect {
+  width: 100%;
+  height: 1.85rem;
+  margin: 0 0 0.15rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.presetSelect:hover,
+.presetSelect:focus {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--border));
+}
+
+.presetSelect:focus {
+  outline: none;
+}
+
+.presetHint {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.fold {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  width: 100%;
+  margin: 0.7rem 0 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fold:hover {
+  color: var(--text);
+}
+
+.foldChevron {
+  transition: transform 0.2s ease;
+}
+
+.fold[aria-expanded='true'] .foldChevron {
+  transform: rotate(90deg);
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.18rem 0.55rem;
+  margin-bottom: 0.5rem;
+  align-items: baseline;
+}
+
+.sliderHead {
+  display: contents;
+}
+
+.sliderLabel {
+  font-size: 0.72rem;
+  color: var(--text);
+  min-width: 0;
+}
+
+.sliderValue {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.slider input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #75beff;
+  cursor: pointer;
+}
+
+.reset {
+  margin-top: 0.55rem;
+  width: 100%;
+  height: 1.85rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reset:hover {
+  color: var(--text);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.32rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check input {
+  margin: 0;
+  accent-color: #75beff;
+  cursor: pointer;
+}
+
+.checkDisabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.checkDisabled input {
+  cursor: default;
+}
+
+.nested {
+  margin: 0.15rem 0 0.45rem 0.15rem;
+  padding: 0.4rem 0.5rem 0.35rem;
+  border-left: 1px solid var(--border);
+}
+
+.subSection {
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dateScope {
+  margin: 0 0 0.35rem;
+}
+
+.dateScope > div {
+  margin-bottom: 0;
+}
+
+.checkGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 0.4rem;
+}

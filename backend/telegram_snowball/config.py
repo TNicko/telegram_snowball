@@ -25,7 +25,9 @@ class Settings(BaseSettings):
         path.mkdir(parents=True, exist_ok=True)
         (path / "chats" / "telegram").mkdir(parents=True, exist_ok=True)
         (path / "models").mkdir(parents=True, exist_ok=True)
-        (path / "blobs").mkdir(parents=True, exist_ok=True)
+        (path / "blobs" / "images").mkdir(parents=True, exist_ok=True)
+        (path / "cache" / "images").mkdir(parents=True, exist_ok=True)
+        (path / "tmp" / "media").mkdir(parents=True, exist_ok=True)
         return path
 
 

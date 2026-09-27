@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router'
 import { api, type AppStatus } from '../lib/api'
+import { hydrateSnowballJobs } from '../hooks/useSnowballJobs'
 import { AppStatusContext } from './statusContext'
 
 export function SetupGate({ children }: { children: ReactNode }) {
@@ -8,6 +9,10 @@ export function SetupGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    void api
+      .jobs()
+      .then((res) => hydrateSnowballJobs(res.jobs))
+      .catch(() => undefined)
     api
       .status()
       .then(setStatus)

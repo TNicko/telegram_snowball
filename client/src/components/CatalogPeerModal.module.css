@@ -1,0 +1,246 @@
+.modal {
+  position: relative;
+  width: min(54rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+:global(.modal).modal {
+  width: min(54rem, calc(100vw - 2rem));
+}
+.close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.close:hover {
+  color: var(--text);
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0 1.75rem 1.1rem 0;
+}
+.headBody {
+  min-width: 0;
+}
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.spinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-width: 1.5px;
+  flex-shrink: 0;
+}
+.meta {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.live {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+}
+.loading {
+  margin: 0 0 1rem;
+}
+.layers {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+  background: #101010;
+}
+.axis {
+  display: grid;
+  grid-template-columns: 9rem 300px 8.5rem 3.8rem;
+  gap: 0.65rem 0.85rem;
+  align-items: end;
+  padding: 0.45rem 0.8rem 0.15rem;
+}
+.axisRange {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  width: 300px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 9rem 300px 8.5rem max-content;
+  gap: 0.65rem 0.85rem;
+  align-items: center;
+  padding: 0.65rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.row:first-child {
+  border-top: none;
+}
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+.label {
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.detail {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.window {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  color: var(--tag-yellow);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.meter {
+  position: relative;
+  display: block;
+  width: 300px;
+  height: 0.4rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+.meterFill {
+  position: absolute;
+  top: 0;
+  display: block;
+  height: 100%;
+  background: var(--text);
+  border-radius: inherit;
+}
+.valueStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.08rem;
+  min-width: 0;
+}
+.value {
+  font-size: 0.75rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+.valueDetail {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.partial {
+  color: var(--tag-yellow);
+}
+.partial .valueDetail {
+  color: var(--muted);
+}
+.scrapeBtns {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  min-width: 3.8rem;
+  justify-self: end;
+}
+.scrapeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scrapeBtn:hover:not(:disabled) {
+  color: var(--text);
+}
+.scrapeBtn:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+.btnSpinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-width: 1.5px;
+}
+.scrapeSlot {
+  width: 3.8rem;
+  justify-self: end;
+}
+.notes {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.actions {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: 0.35rem 0.75rem;
+  }
+  .meter {
+  grid-column: 1 / -1;
+  width: 300px;
+  justify-self: start;
+}
+  .value,
+  .valueStack {
+    text-align: left;
+  }
+  .valueStack,
+  .scrapeBtns {
+    align-items: flex-start;
+    justify-self: start;
+  }
+  .scrapeBtn,
+  .scrapeSlot {
+    width: auto;
+    justify-self: start;
+  }
+}

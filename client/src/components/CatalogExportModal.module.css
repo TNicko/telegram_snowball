@@ -1,0 +1,112 @@
+.exportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  height: 46px;
+  padding: 0 0.85rem 0 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  border-radius: 16px;
+  background: var(--elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.exportBtn:hover:not(:disabled) {
+  background: #1c1c1c;
+}
+.exportBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.modal {
+  width: min(34rem, calc(100vw - 2rem));
+}
+.title {
+  margin: 0 0 0.85rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+.label {
+  display: block;
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+.formatGroup {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #101010;
+}
+.formatBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.28rem 0.7rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.formatBtn:hover {
+  color: var(--text);
+}
+.formatBtnActive {
+  background: #1f1f1f;
+  color: var(--text);
+}
+.block {
+  margin: 0 0 1rem;
+}
+.peerPick {
+  margin: 0 0 1rem;
+}
+.typeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.45rem 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.typeCount {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+}
+.summary {
+  margin: 0.85rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.actions {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}

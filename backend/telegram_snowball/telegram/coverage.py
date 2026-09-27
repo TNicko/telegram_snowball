@@ -3,15 +3,25 @@ from __future__ import annotations
 from typing import Any
 
 
-async def refresh_fetch_coverage(conn: Any, peer_id: int) -> None:
-    """Record the stored-message date window. No row means Posts is uncovered."""
+async def refresh_fetch_coverage(
+    conn: Any,
+    peer_id: int,
+    *,
+    min_telegram_id: int | None = None,
+) -> None:
+    """Record the stored-message date window. No row means Posts is uncovered.
+
+    ``min_telegram_id`` limits the window to the contiguous newest-down scrape so
+    an isolated first-visible message does not look like full history coverage.
+    """
     row = await conn.execute(
         """
         SELECT MIN(date) AS covered_after, MAX(date) AS covered_before
         FROM messages
         WHERE peer_external_id = %s
+          AND (%s::int IS NULL OR telegram_message_id >= %s)
         """,
-        (peer_id,),
+        (peer_id, min_telegram_id, min_telegram_id),
     )
     span = await row.fetchone()
     if not span or span["covered_before"] is None:

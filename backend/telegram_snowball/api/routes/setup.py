@@ -194,3 +194,29 @@ async def setup_session(websocket: WebSocket) -> None:
             result = client.disconnect()
             if result is not None:
                 await result
+
+
+@router.delete("/session")
+async def delete_session() -> dict[str, bool]:
+    """Drop the v1 Telegram session so Home can change or remove the account."""
+    settings = load_settings()
+    async with get_conn(settings) as conn:
+        existing = await conn.execute("SELECT id FROM telegram_sessions LIMIT 1")
+        if await existing.fetchone() is None:
+            raise HTTPException(status_code=404, detail="No Telegram session to remove.")
+        await conn.execute(
+            """
+            UPDATE jobs
+            SET status = 'cancelled',
+                finished_at = COALESCE(finished_at, now()),
+                heartbeat_at = now()
+            WHERE status IN ('queued', 'running')
+            """
+        )
+        await conn.execute(
+            "UPDATE peers SET is_scraping = false, scrape_detail = NULL WHERE is_scraping = true"
+        )
+        await conn.execute("DELETE FROM telegram_sessions")
+        await conn.execute("DELETE FROM telegram_accounts")
+        await conn.commit()
+    return {"ok": True}

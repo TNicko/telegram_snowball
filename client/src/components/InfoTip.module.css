@@ -1,0 +1,48 @@
+.wrap {
+  position: relative;
+  display: inline;
+  cursor: help;
+  color: inherit;
+}
+.icon {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-left: 0.16rem;
+  vertical-align: super;
+  color: var(--muted);
+}
+.wrap:hover .icon,
+.wrap:focus-visible .icon {
+  color: var(--text);
+  outline: none;
+}
+.wrap:focus-visible {
+  outline: none;
+}
+.tip {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.4rem);
+  width: max-content;
+  max-width: 16.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 8;
+}
+.wrap:hover .tip,
+.wrap:focus-within .tip {
+  opacity: 1;
+}

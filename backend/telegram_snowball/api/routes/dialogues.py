@@ -6,9 +6,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from psycopg.types.json import Jsonb
 
-from telegram_snowball.catalog import attach_catalog_stats, load_catalog_stats
+from telegram_snowball.catalog import attach_catalog_stats, load_catalog_stats, load_peer_coverage
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import get_conn
+from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.telegram.profile_photos import sniff_profile_media
 
 router = APIRouter()
@@ -65,6 +66,23 @@ async def list_peers() -> dict[str, Any]:
     return {"peers": peers}
 
 
+@router.get("/peers/{external_id}/coverage")
+async def peer_coverage(external_id: int) -> dict[str, Any]:
+    settings = load_settings()
+    async with get_conn(settings) as conn:
+        peer = await load_public_peer(conn, external_id, data_dir=settings.data_dir)
+        if peer is None:
+            raise HTTPException(status_code=404, detail="Peer not found")
+        coverage = await load_peer_coverage(conn, peer)
+        if coverage["timeline"]["start"] is None:
+            from telegram_snowball.telegram.first_message import backfill_first_visible_message
+
+            if await backfill_first_visible_message(conn, settings, external_id):
+                await conn.commit()
+                coverage = await load_peer_coverage(conn, peer)
+        return coverage
+
+
 @router.get("/peers/{external_id}/photo")
 async def peer_photo(external_id: int) -> FileResponse:
     settings = load_settings()
@@ -89,8 +107,11 @@ async def peer_photo(external_id: int) -> FileResponse:
 
 
 @router.post("/dialogues/sync")
-async def sync_dialogues() -> dict[str, Any]:
-    """Queue peer-only dialogue materialize if one is not already active or done."""
+async def sync_dialogues(force: bool = False) -> dict[str, Any]:
+    """Queue peer-only dialogue materialize if one is not already active or done.
+
+    Pass force=true to queue another pass after a successful sync (new chats).
+    """
     settings = load_settings()
     async with get_conn(settings) as conn:
         session = await conn.execute("SELECT id FROM telegram_sessions LIMIT 1")
@@ -112,19 +133,20 @@ async def sync_dialogues() -> dict[str, Any]:
                 return {"started": False, "job": dict(current)}
             return {"started": False, "blocked": True, "job": dict(current)}
 
-        done = await conn.execute(
-            """
-            SELECT id, task_type, status, params, progress, error, created_at, started_at, finished_at
-            FROM jobs
-            WHERE task_type = 'fetch_dialogues'
-              AND status = 'succeeded'
-            ORDER BY finished_at DESC NULLS LAST
-            LIMIT 1
-            """
-        )
-        finished = await done.fetchone()
-        if finished is not None:
-            return {"started": False, "job": dict(finished)}
+        if not force:
+            done = await conn.execute(
+                """
+                SELECT id, task_type, status, params, progress, error, created_at, started_at, finished_at
+                FROM jobs
+                WHERE task_type = 'fetch_dialogues'
+                  AND status = 'succeeded'
+                ORDER BY finished_at DESC NULLS LAST
+                LIMIT 1
+                """
+            )
+            finished = await done.fetchone()
+            if finished is not None:
+                return {"started": False, "job": dict(finished)}
 
         params = {"mode": "materialize", "messages": False, "participants": False}
         inserted = await conn.execute(
@@ -133,7 +155,7 @@ async def sync_dialogues() -> dict[str, Any]:
             VALUES ('fetch_dialogues', 'queued', %s)
             RETURNING id, task_type, status, params, progress, created_at, started_at, finished_at
             """,
-            (Jsonb(params),),
+            (Jsonb(json_safe(params)),),
         )
         job = await inserted.fetchone()
         await conn.commit()

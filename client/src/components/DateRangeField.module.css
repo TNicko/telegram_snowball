@@ -1,0 +1,95 @@
+.root {
+  margin: 0 0 1rem;
+}
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0f0f0f;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+.input:hover,
+.inputOpen {
+  border-color: color-mix(in srgb, var(--text) 28%, transparent);
+}
+.placeholder {
+  color: var(--muted);
+}
+.value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.clear:hover {
+  color: var(--text);
+  background: #1c1c1c;
+}
+.pop {
+  padding: 0.55rem 0.65rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #161616;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.calendar {
+  margin: 0;
+  --rdp-accent-color: var(--text);
+  --rdp-accent-background-color: color-mix(in srgb, var(--text) 16%, transparent);
+  --rdp-day-height: 2rem;
+  --rdp-day-width: 2rem;
+  --rdp-day_button-height: 2rem;
+  --rdp-day_button-width: 2rem;
+  --rdp-nav-height: 2rem;
+  --rdp-today-color: var(--text);
+  --rdp-range_middle-color: var(--text);
+  --rdp-range_start-color: var(--primary-contrast);
+  --rdp-range_end-color: var(--primary-contrast);
+  color: var(--text);
+  font-size: 0.8125rem;
+}

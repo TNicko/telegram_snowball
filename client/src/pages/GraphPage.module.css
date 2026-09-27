@@ -1,0 +1,374 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.75rem 1.75rem 5.5rem;
+}
+
+.title {
+  margin: 0 0 1.15rem;
+  max-width: 28rem;
+  font-size: 1.45rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.action {
+  text-decoration: none;
+}
+
+.loading {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.loadingStage {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  pointer-events: none;
+}
+
+.loadingSpinner {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+}
+
+.hud {
+  position: absolute;
+  left: 0.9rem;
+  top: 0.85rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+
+.legend,
+.meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--elevated) 88%, transparent);
+  backdrop-filter: blur(10px);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.legend {
+  color: var(--text);
+  font-weight: 600;
+  flex-wrap: wrap;
+  max-width: min(36rem, calc(100vw - 12rem));
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 99px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.swatchScraping {
+  box-shadow:
+    0 0 0 1px rgba(125, 255, 106, 0.45),
+    0 0 8px 2px rgba(125, 255, 106, 0.55);
+}
+
+.live {
+  margin-left: 0.2rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 99px;
+  background: color-mix(in srgb, #35c98f 22%, transparent);
+  color: #35c98f;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+}
+
+.warn {
+  margin-left: 0.2rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 99px;
+  background: color-mix(in srgb, #e0a054 22%, transparent);
+  color: #e0a054;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+}
+
+.budgetModal {
+  width: min(28rem, calc(100vw - 2rem));
+}
+
+.budgetTitle {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.budgetCopy {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.budgetLabel {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.budgetActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.budgetCancel {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inspector {
+  position: absolute;
+  left: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 3;
+  width: min(18.5rem, calc(100vw - 1.8rem));
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--elevated) 92%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.inspectorMessage {
+  width: min(22.5rem, calc(100vw - 1.8rem));
+  max-height: min(34rem, calc(100vh - 5.5rem));
+  overflow-y: auto;
+}
+
+.inspectorMessageHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.65rem;
+}
+
+.inspectorMessageHead .inspectorTitle {
+  margin: 0;
+  min-width: 0;
+}
+
+.inspectorId {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.inspectorMedia {
+  margin: 0 0 0.7rem;
+}
+
+.inspectorBody,
+.inspectorBodyMuted,
+.inspectorLoading {
+  margin: 0 0 0.7rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.inspectorBody {
+  white-space: pre-wrap;
+}
+
+.inspectorBodyMuted,
+.inspectorLoading {
+  color: var(--muted);
+}
+
+.inspectorHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  min-width: 0;
+  margin: 0 0 0.65rem;
+}
+
+.inspectorHeadBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.inspectorTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.2rem;
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.inspectorTitleText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scrapeSpinner {
+  flex-shrink: 0;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-width: 1.5px;
+}
+
+.inspectorMeta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.inspectorLive {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+}
+
+.inspectorError {
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  color: var(--danger);
+}
+
+.inspectorStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.7rem;
+  margin: 0;
+}
+
+.inspectorStats dt {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.inspectorStats dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.inspectorBar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.7rem;
+}
+
+.scrapeBtn {
+  flex: 1;
+  height: 1.85rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.scrapeBtn:hover:not(:disabled) {
+  background: #222;
+}
+
+.scrapeBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.inspectorIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.inspectorIconBtn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.inspectorIconBtn:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .hud {
+    left: 0.65rem;
+    top: 0.65rem;
+    max-width: calc(100% - 8rem);
+  }
+  .inspector {
+    left: 0.65rem;
+    bottom: 0.65rem;
+  }
+}

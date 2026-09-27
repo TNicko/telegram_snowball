@@ -18,9 +18,19 @@ dependencies = [
     "telethon>=1.43.2,<1.44",
     "cryptography>=44.0.0",
     "pgvector>=0.3.6",
+    "pillow>=11.0.0",
+    "ImageHash>=4.3.0",
+    "numpy>=2.0.0",
+    "scipy>=1.14.0",
+    "huggingface_hub>=0.26.0",
 ]
 
 [project.optional-dependencies]
+embed = [
+    "transformers>=4.49.0",
+    "safetensors>=0.4.0",
+    "sentencepiece>=0.2.0",
+]
 dev = ["ruff", "mypy", "pytest", "pytest-asyncio"]
 
 [project.scripts]

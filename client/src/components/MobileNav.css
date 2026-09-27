@@ -1,0 +1,296 @@
+.mobileNav {
+  display: none;
+  position: relative;
+  flex-shrink: 0;
+  --color-fg: var(--text);
+  --color-bg: var(--bg);
+  --color-border: var(--border);
+  --color-fg-muted: var(--muted);
+  --nav-link-color: color-mix(in srgb, var(--text) 68%, var(--muted));
+  --nav-row-padding: 1.25rem;
+}
+
+.mobileNav__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--nav-link-color);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.mobileNav__toggle:hover {
+  color: var(--color-fg);
+}
+
+.mobileNav__panelWrap {
+  --mobile-nav-row-padding-y: 1rem;
+  --mobile-nav-row-padding-x: var(--nav-row-padding);
+  --mobile-nav-divider: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  --mobile-nav-panel-reveal-duration: 0.28s;
+  --mobile-nav-panel-reveal-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 60;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--mobile-nav-panel-reveal-duration) var(--mobile-nav-panel-reveal-ease);
+  pointer-events: none;
+  overflow: visible;
+  background: transparent;
+}
+
+.mobileNav__panelWrap--open {
+  grid-template-rows: 1fr;
+  pointer-events: auto;
+}
+
+.mobileNav__panelInner {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  min-height: 0;
+  max-height: calc(100vh - var(--mobile-nav-panel-top, 0px) - 1rem);
+}
+
+.mobileNav__panelInner::-webkit-scrollbar {
+  display: none;
+}
+
+.mobileNav__panel {
+  width: 100%;
+  margin-top: 0;
+  overflow: visible;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.mobileNav__panelCard {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-bg) 78%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: none;
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition:
+    opacity 0.22s ease,
+    transform var(--mobile-nav-panel-reveal-duration) var(--mobile-nav-panel-reveal-ease);
+}
+
+.mobileNav__panelWrap--open .mobileNav__panelCard {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mobileNav__list {
+  width: 100%;
+  border-top: var(--mobile-nav-divider);
+}
+
+.mobileNav__group {
+  border-bottom: var(--mobile-nav-divider);
+}
+
+.mobileNav__groupTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--mobile-nav-row-padding-y) var(--mobile-nav-row-padding-x);
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-fg);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.mobileNav__group--active .mobileNav__groupTrigger {
+  color: var(--color-fg);
+}
+
+.mobileNav__groupTrigger:hover {
+  background: color-mix(in srgb, var(--color-fg) 4%, transparent);
+}
+
+.mobileNav__chevron {
+  margin: 0 0.8rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobileNav__groupTrigger[aria-expanded='true'] .mobileNav__chevron {
+  transform: rotate(180deg);
+}
+
+.mobileNav__groupBodyWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.mobileNav__groupBodyWrap--open {
+  grid-template-rows: 1fr;
+  pointer-events: auto;
+}
+
+.mobileNav__groupBodyInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mobileNav__groupBody {
+  padding: 0 var(--mobile-nav-row-padding-x) var(--mobile-nav-row-padding-y);
+  border-top: var(--mobile-nav-divider);
+  opacity: 0;
+  transform: translateY(-0.375rem);
+  transition:
+    opacity 0.3s ease,
+    transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobileNav__groupBodyWrap--open .mobileNav__groupBody {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobileNav__chevron,
+  .mobileNav__panelWrap,
+  .mobileNav__panelCard,
+  .mobileNav__groupBodyWrap,
+  .mobileNav__groupBody {
+    transition: none;
+  }
+
+  .mobileNav__panelWrap--open .mobileNav__panelCard,
+  .mobileNav__groupBodyWrap--open .mobileNav__groupBody {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.mobileNav__groupBody .navDropdown__columns--multi,
+.mobileNav__groupBody .navDropdown__columns--three {
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+.mobileNav__groupBody .navDropdown__description {
+  white-space: normal;
+}
+
+.mobileNav__link {
+  display: block;
+  padding: var(--mobile-nav-row-padding-y) var(--mobile-nav-row-padding-x);
+  border-bottom: var(--mobile-nav-divider);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--nav-link-color);
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.mobileNav__link:hover,
+.mobileNav__link--active {
+  color: var(--color-fg);
+  background: color-mix(in srgb, var(--color-fg) 4%, transparent);
+}
+
+.navDropdown__columns {
+  display: flex;
+  margin-top: 0.35rem;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.navDropdown__columns--multi {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem 2rem;
+}
+
+.navDropdown__columns--three {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.25rem 1.75rem;
+}
+
+.navDropdown__heading {
+  margin: 0 0 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+}
+
+.navDropdown__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.navDropdown__item {
+  display: block;
+  padding: 0.55rem 0.6rem;
+  margin: 0 -0.6rem;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.navDropdown__item:hover,
+.navDropdown__item--active {
+  background: color-mix(in srgb, var(--color-fg) 6%, transparent);
+}
+
+.navDropdown__label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-fg);
+  line-height: 1.3;
+}
+
+.navDropdown__description {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--color-fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+  .mobileNav {
+    display: block;
+    flex-shrink: 0;
+  }
+}

@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { AccountAvatar } from '../components/AccountAvatar'
+import { AccountCardMenu } from '../components/AccountCardMenu'
 import { CatalogSearchBar } from '../components/CatalogSearchBar'
+import { isLiveJob, JobCard, JobList } from '../components/HomeJobs'
 import { LoadingText } from '../components/LoadingText'
 import { PeerAvatar } from '../components/PeerAvatar'
+import { ModelSetupModal } from '../components/ModelSetupModal'
+import { SnowballConfigModal } from '../components/SnowballConfigModal'
 import { useDialogueSync } from '../hooks/useDialogueSync'
-import { accountDisplayName, formatAccountPhone } from '../lib/account'
-import { api, type AppStatus, type Peer } from '../lib/api'
+import { useSnowballJobs } from '../hooks/useSnowballJobs'
+import { accountDisplayName, formatAccountPhone, syncingChatsLabel } from '../lib/account'
+import { api, type AppStatus, type Job, type ModelCatalog, type ModelSlot, type Peer } from '../lib/api'
 import { peerTypeLabel } from '../lib/peer'
 import { useAppStatus } from '../layout/statusContext'
 import h from './HomePage.module.css'
@@ -18,16 +23,12 @@ export default function HomePage() {
   const [query, setQuery] = useState('')
   const [hit, setHit] = useState<Peer | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { jobs, setJobs } = useSnowballJobs()
   const [modalOpen, setModalOpen] = useState(false)
-  const [embedImages, setEmbedImages] = useState(true)
-  const [embedText, setEmbedText] = useState(true)
-  const [images, setImages] = useState(true)
-  const [videos, setVideos] = useState(true)
-  const [participants, setParticipants] = useState(false)
-  const [restrictRange, setRestrictRange] = useState(false)
-  const [advanced, setAdvanced] = useState(false)
-  const [maxDepth, setMaxDepth] = useState('')
-  const [maxBytes, setMaxBytes] = useState('')
+  const [modelSlot, setModelSlot] = useState<ModelSlot | null>(null)
+  const [models, setModels] = useState<ModelCatalog | null>(null)
+  const [modelError, setModelError] = useState<string | null>(null)
+  const [modelBusy, setModelBusy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -35,20 +36,67 @@ export default function HomePage() {
 
   useEffect(() => {
     api.status().then(setStatus).catch((err: Error) => setError(err.message))
+    api.models().then(setModels).catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    if (!models?.download) return
+    const timer = window.setInterval(() => {
+      void api.models().then(setModels).catch(() => undefined)
+      void api.status().then(setStatus).catch(() => undefined)
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [models?.download])
 
   const account = status?.account ?? null
   const accountName = account ? accountDisplayName(account) : null
   const accountPhone = formatAccountPhone(account?.phone)
 
-  const imageReady = status?.models.image.ready ?? false
-  const textReady = status?.models.text.ready ?? false
-  const gate = useMemo(() => {
-    const missing: string[] = []
-    if (embedImages && !imageReady) missing.push('image embeddings (SigLIP)')
-    if (embedText && !textReady) missing.push('text embeddings (BGE-M3)')
-    return missing
-  }, [embedImages, embedText, imageReady, textReady])
+  const imageReady = models?.slots.image.ready ?? status?.models.image.ready ?? false
+  const textReady = models?.slots.text.ready ?? status?.models.text.ready ?? false
+  const captionReady = models?.slots.caption.ready ?? status?.models.caption.ready ?? false
+
+  const applyModels = (next: ModelCatalog) => {
+    setModels(next)
+    setStatus((current) =>
+      current
+        ? {
+            ...current,
+            models: {
+              image: next.slots.image,
+              text: next.slots.text,
+              caption: next.slots.caption,
+            },
+          }
+        : current,
+    )
+  }
+
+  const selectModel = async (modelId: string) => {
+    if (!modelSlot || modelBusy) return
+    setModelBusy(true)
+    setModelError(null)
+    try {
+      applyModels(await api.selectModels({ [modelSlot]: modelId }))
+    } catch (err) {
+      setModelError(err instanceof Error ? err.message : 'Could not select that model')
+    } finally {
+      setModelBusy(false)
+    }
+  }
+
+  const downloadModel = async (modelId: string) => {
+    if (modelBusy) return
+    setModelBusy(true)
+    setModelError(null)
+    try {
+      applyModels(await api.downloadModel(modelId))
+    } catch (err) {
+      setModelError(err instanceof Error ? err.message : 'Could not start the download')
+    } finally {
+      setModelBusy(false)
+    }
+  }
 
   const search = async (value = query) => {
     const q = value.trim()
@@ -67,24 +115,15 @@ export default function HomePage() {
     }
   }
 
-  const startSnowball = async () => {
-    if (!hit) return
+  const startSnowball = async (params: Record<string, unknown>) => {
     setBusy(true)
     setError(null)
     try {
-      const job = await api.createJob('forward_snowball', {
-        seed_external_id: hit.external_id,
-        images,
-        videos,
-        participants,
-        embed_images: embedImages,
-        embed_text: embedText,
-        restrict_date_range: restrictRange,
-        max_depth: maxDepth ? Number(maxDepth) : null,
-        max_media_bytes: maxBytes ? Number(maxBytes) : null,
-      })
+      const job = await api.createJob('forward_snowball', params)
       setModalOpen(false)
-      navigate(`/jobs/${job.id}`)
+      setHit(null)
+      setQuery('')
+      setJobs((current) => [job, ...current.filter((item) => item.id !== job.id)])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start snowball')
     } finally {
@@ -92,13 +131,45 @@ export default function HomePage() {
     }
   }
 
+  const startFromHit = async (params: Record<string, unknown>) => {
+    await startSnowball(params)
+  }
+
+  const stopJob = async (job: Job) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const stopped = await api.cancelJob(job.id)
+      setJobs((current) => current.map((item) => (item.id === stopped.id ? stopped : item)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not stop job')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const dropAccount = async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.removeSession()
+      navigate('/setup', { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the Telegram account')
+      setBusy(false)
+    }
+  }
+
+  const liveJob = jobs.find((job) => isLiveJob(job.status)) ?? null
+
   return (
-    <div>
+    <div className={h.page}>
       <div className="homeOverview">
         <section className="homeCol">
           <h2 className="sectionTitle">Telegram Account</h2>
           {account ? (
-            <div className="card accountCard">
+            <div className={`card accountCard ${h.accountCard}`}>
               <AccountAvatar
                 photoUrl={account.photo_url}
                 mediaKind={account.photo_media_kind}
@@ -110,6 +181,11 @@ export default function HomePage() {
                 {account.username ? <div className="muted">@{account.username}</div> : null}
                 {accountPhone ? <div className="muted">{accountPhone}</div> : null}
               </div>
+              <AccountCardMenu
+                busy={busy}
+                onChangeAccount={() => void dropAccount()}
+                onRemoveAccount={() => void dropAccount()}
+              />
             </div>
           ) : (
             <div className="card accountCard">
@@ -120,170 +196,163 @@ export default function HomePage() {
         <section className="homeCol">
           <h2 className="sectionTitle">Models</h2>
           <div className="modelCards">
-            <ModelCard title="SigLIP2 images" ready={imageReady} />
-            <ModelCard title="BGE-M3 text" ready={textReady} />
-            <ModelCard title="BLIP captions" ready={status?.models.caption.ready ?? false} optional />
+            <ModelCard
+              title={models?.slots.image.label ?? 'Vision'}
+              ready={imageReady}
+              hint={models?.copy.image.blurb}
+              downloading={models?.download?.params?.slot === 'image'}
+              onClick={() => setModelSlot('image')}
+            />
+            <ModelCard
+              title={models?.slots.text.label ?? 'Message text'}
+              ready={textReady}
+              hint={models?.copy.text.blurb}
+              downloading={models?.download?.params?.slot === 'text'}
+              onClick={() => setModelSlot('text')}
+            />
+            <ModelCard
+              title={models?.slots.caption.label ?? 'Captions'}
+              ready={captionReady}
+              hint={models?.copy.caption.blurb}
+              downloading={models?.download?.params?.slot === 'caption'}
+              onClick={() => setModelSlot('caption')}
+            />
           </div>
         </section>
       </div>
 
-      <section className={h.crawl}>
-        <h1 className={h.crawlTitle}>Begin Telegram Crawling</h1>
-        {dialoguesRunning ? (
+      <section className={`${h.crawl}${jobs.length > 0 ? ` ${h.crawlFilled}` : ''}`}>
+        <h1 className={h.crawlTitle}>Begin Crawling Telegram</h1>
+        {dialoguesRunning && !liveJob ? (
           <p>
-            <LoadingText>
-              {dialoguesLoaded > 0
-                ? `Loading dialogues · ${dialoguesLoaded} so far`
-                : 'Loading dialogues'}
-            </LoadingText>
-          </p>
-        ) : null}
-        {status?.active_job ? (
-          <p className="muted">
-            Active job: {status.active_job.task_type} ({status.active_job.status}){' '}
-            <Link to={`/jobs/${status.active_job.id}`}>Open</Link>
+            <LoadingText>{syncingChatsLabel(account, dialoguesLoaded)}</LoadingText>
           </p>
         ) : null}
         <div className={h.crawlSearch}>
-          <CatalogSearchBar
-            query={query}
-            onQueryChange={(value) => {
-              setQuery(value)
-              if (hit) setHit(null)
-            }}
-            onSearch={(value) => void search(value)}
-            isLoading={searching}
-            placeholder="Search by @username or peer id"
-            ariaLabel="Search seed peer"
-            flush
-            results={
-              hit ? (
-                <button
-                  className={h.hit}
-                  type="button"
-                  role="option"
-                  aria-selected="true"
-                  onClick={() => setModalOpen(true)}
-                >
-                  <PeerAvatar peer={hit} />
-                  <span className={h.hitBody}>
-                    <span className={h.hitTitle}>
-                      {hit.title ?? (hit.username ? `@${hit.username}` : String(hit.external_id))}
+          {liveJob ? (
+            <JobCard
+              job={liveJob}
+              featured
+              busy={busy}
+              onStop={(job) => void stopJob(job)}
+              onStart={(job) => void startSnowball(job.params)}
+            />
+          ) : (
+            <CatalogSearchBar
+              query={query}
+              onQueryChange={(value) => {
+                setQuery(value)
+                if (hit) setHit(null)
+              }}
+              onSearch={(value) => void search(value)}
+              isLoading={searching}
+              placeholder="Search by @username or peer id"
+              ariaLabel="Search seed peer"
+              flush
+              results={
+                hit ? (
+                  <button
+                    className={h.hit}
+                    type="button"
+                    role="option"
+                    aria-selected="true"
+                    onClick={() => setModalOpen(true)}
+                  >
+                    <PeerAvatar peer={hit} />
+                    <span className={h.hitBody}>
+                      <span className={h.hitTitle}>
+                        {hit.title ?? (hit.username ? `@${hit.username}` : String(hit.external_id))}
+                      </span>
+                      <span className={h.hitMeta}>
+                        {peerTypeLabel(hit.peer_type)}
+                        {hit.username ? ` · @${hit.username}` : ''}
+                      </span>
                     </span>
-                    <span className={h.hitMeta}>
-                      {peerTypeLabel(hit.peer_type)}
-                      {hit.username ? ` · @${hit.username}` : ''}
-                    </span>
-                  </span>
-                </button>
-              ) : null
-            }
-          />
+                  </button>
+                ) : null
+              }
+            />
+          )}
         </div>
         {error ? <p className="error">{error}</p> : null}
-        <aside className={h.note}>
-          A forward snowball starts at one <strong>source peer</strong> — a channel, group, or user
-          this account can already see. It scrapes that peer’s messages, then follows native Telegram
-          forward metadata into the communities those posts came from, and keeps expanding from
-          there. Image and text embedding stay on unless you turn them off; those models must be
-          ready to start.
-        </aside>
+        {liveJob ? null : (
+          <aside className={h.note}>
+            Enter the peer you would like to start scraping from (must be a public community with a
+            username, or one that already exists on your account). Snowball scrapes its messages, then
+            expands through Telegram forwards.
+          </aside>
+        )}
+        <JobList
+          jobs={liveJob ? jobs.filter((job) => job.id !== liveJob.id) : jobs}
+          busy={busy}
+          startBlocked={liveJob != null}
+          onStop={(job) => void stopJob(job)}
+          onStart={(job) => void startSnowball(job.params)}
+        />
       </section>
 
+      {modelSlot && models ? (
+        <ModelSetupModal
+          slot={modelSlot}
+          catalog={models}
+          busy={modelBusy}
+          error={modelError}
+          onClose={() => {
+            setModelSlot(null)
+            setModelError(null)
+          }}
+          onSelect={(id) => void selectModel(id)}
+          onDownload={(id) => void downloadModel(id)}
+        />
+      ) : null}
+
       {modalOpen && hit ? (
-        <div className="modalScrim" onClick={() => setModalOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className={h.modalTitle}>Begin snowballing</h3>
-            <div className={h.seed}>
-              <PeerAvatar peer={hit} />
-              <span className={h.hitBody}>
-                <span className={h.hitTitle}>
-                  {(hit.title ?? '').trim() ||
-                    (hit.username ? `@${hit.username}` : String(hit.external_id))}
-                </span>
-                <span className={h.hitMeta}>
-                  {peerTypeLabel(hit.peer_type)}
-                  {hit.username ? ` · @${hit.username}` : ''}
-                </span>
-              </span>
-            </div>
-            <p className="muted">
-              First/last message probe (created date, latest message id) will land in the next pass.
-              Messages are always scraped.
-            </p>
-            <label className="toggle">
-              <input type="checkbox" checked={restrictRange} onChange={(e) => setRestrictRange(e.target.checked)} />
-              Restrict scrape to a date window (also skips forward sources only seen outside it)
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={images} onChange={(e) => setImages(e.target.checked)} />
-              Scrape images
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={videos} onChange={(e) => setVideos(e.target.checked)} />
-              Scrape videos
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={participants} onChange={(e) => setParticipants(e.target.checked)} />
-              Scrape participants
-            </label>
-            <hr style={{ border: 0, borderTop: '1px solid var(--border)' }} />
-            <label className="toggle">
-              <input type="checkbox" checked={embedImages} onChange={(e) => setEmbedImages(e.target.checked)} />
-              Embed images (default on)
-            </label>
-            <label className="toggle">
-              <input type="checkbox" checked={embedText} onChange={(e) => setEmbedText(e.target.checked)} />
-              Embed message text (default on)
-            </label>
-            {gate.length > 0 ? (
-              <p className="error">
-                Cannot start: {gate.join(' and ')} not ready. Finish model setup or turn the toggle
-                off.
-              </p>
-            ) : (
-              <p className="ok">Embedding gate clear.</p>
-            )}
-            <button className="btn" onClick={() => setAdvanced((v) => !v)}>
-              {advanced ? 'Hide advanced' : 'Advanced'}
-            </button>
-            {advanced ? (
-              <>
-                <div className="field">
-                  <label htmlFor="depth">Max depth (empty = unlimited)</label>
-                  <input id="depth" value={maxDepth} onChange={(e) => setMaxDepth(e.target.value)} />
-                </div>
-                <div className="field">
-                  <label htmlFor="bytes">Max media bytes</label>
-                  <input id="bytes" value={maxBytes} onChange={(e) => setMaxBytes(e.target.value)} />
-                </div>
-              </>
-            ) : null}
-            <div className="row" style={{ marginTop: '1rem' }}>
-              <button
-                className="btn btnPrimary"
-                disabled={busy || gate.length > 0}
-                onClick={() => void startSnowball()}
-              >
-                Start snowball
-              </button>
-              <button className="btn" onClick={() => setModalOpen(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <SnowballConfigModal
+          peer={hit}
+          busy={busy}
+          imageReady={imageReady}
+          textReady={textReady}
+          title="Begin snowballing"
+          startLabel="Start snowball"
+          onClose={() => setModalOpen(false)}
+          onStart={(params) => void startFromHit(params)}
+        />
       ) : null}
     </div>
   )
 }
 
-function ModelCard({ title, ready, optional }: { title: string; ready: boolean; optional?: boolean }) {
+function ModelCard({
+  title,
+  ready,
+  hint,
+  downloading,
+  onClick,
+}: {
+  title: string
+  ready: boolean
+  hint?: string
+  downloading?: boolean
+  onClick: () => void
+}) {
+  const statusClass = ready
+    ? h.modelStatusReady
+    : downloading
+      ? h.modelStatusBusy
+      : h.modelStatusWarn
+  const status = ready ? 'Ready' : downloading ? 'Downloading' : 'Not ready'
   return (
-    <div className="card">
+    <button
+      type="button"
+      className={`card modelCardBtn ${h.modelCard}`}
+      onClick={onClick}
+      aria-label={`${title}. ${status}`}
+    >
+      <span className={`${h.modelStatus} ${statusClass}`} aria-hidden />
       <h3>{title}</h3>
-      <span className={`pill ${ready ? 'ok' : 'warn'}`}>{ready ? 'Ready' : 'Not ready'}</span>
-      {optional && !ready ? <p className="muted">Optional for v1 snowball gate.</p> : null}
-    </div>
+      {downloading ? <p className="muted">Downloading weights…</p> : null}
+      {!ready && !downloading ? <p className="muted">Click to set up.</p> : null}
+      {ready && hint ? <p className="muted">{hint}</p> : null}
+    </button>
   )
 }

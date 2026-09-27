@@ -66,12 +66,9 @@ def resolve_profile_photo_variant(photo: Photo) -> tuple[str, str, str]:
     return "jpg", "image/jpeg", "image"
 
 
-def sniff_profile_media(path: Path) -> tuple[str | None, str | None]:
-    """Detect image vs looping video avatar from file bytes, not the extension."""
-    try:
-        head = path.read_bytes()[:16]
-    except OSError:
-        return None, None
+def sniff_media_bytes(data: bytes) -> tuple[str | None, str | None]:
+    """Detect raster image vs video from magic bytes."""
+    head = data[:16]
     if head.startswith(b"\xff\xd8"):
         return "image", "image/jpeg"
     if head.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -85,6 +82,24 @@ def sniff_profile_media(path: Path) -> tuple[str | None, str | None]:
     if head.startswith(b"\x1aE\xdf\xa3"):
         return "video", "video/webm"
     return None, None
+
+
+def sniff_profile_media(path: Path) -> tuple[str | None, str | None]:
+    """Detect image vs looping video avatar from file bytes, not the extension."""
+    try:
+        head = path.read_bytes()[:16]
+    except OSError:
+        return None, None
+    return sniff_media_bytes(head)
+
+
+def suffix_for_content_type(content_type: str | None) -> str:
+    return {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+    }.get(content_type or "", ".jpg")
 
 
 def is_raster_image(path: Path) -> bool:

@@ -7,6 +7,12 @@ from uuid import UUID
 from psycopg.types.json import Jsonb
 from psycopg import AsyncConnection
 
+from telegram_snowball.jsonutil import json_safe
+
+
+class JobCancelled(Exception):
+    """The job was cancelled while the worker was still running it."""
+
 
 async def update_job_progress(
     conn: AsyncConnection[Any],
@@ -20,9 +26,20 @@ async def update_job_progress(
             heartbeat_at = now()
         WHERE id = %s
         """,
-        (Jsonb(progress), job_id),
+        (Jsonb(json_safe(progress)), job_id),
     )
     await conn.commit()
+
+
+async def job_is_cancelled(conn: AsyncConnection[Any], job_id: UUID) -> bool:
+    row = await conn.execute("SELECT status FROM jobs WHERE id = %s", (job_id,))
+    data = await row.fetchone()
+    return data is not None and data["status"] == "cancelled"
+
+
+async def raise_if_cancelled(conn: AsyncConnection[Any], job_id: UUID) -> None:
+    if await job_is_cancelled(conn, job_id):
+        raise JobCancelled()
 
 
 async def mark_peer_scraping(
