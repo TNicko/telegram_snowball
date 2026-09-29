@@ -14,15 +14,17 @@ Crawl  -  Collect  -  Process  -  Analyse
 
 </div>
 
-## What it is
+## What it does
 
-- A **local web app** in Docker (nginx + FastAPI + scrape worker + embed sidecar)
-- **One Telegram session** and **one scrape job at a time**; model download/encode run on a separate embed process
-- Postgres (pgvector) for messages, peers, jobs, and graph edges
-- Media, models, and the session secret on a `./data` volume
-- Forward snowball with live progress, catalogs, graphs, pHash, and local text/image embeddings
-
-It is not a hosted SaaS, not a harvester fleet, and not a scrape of chats you cannot already see. **No NVIDIA/GPU is required to boot.**
+- ❄️ **Forward snowball:** Start from a channel, scrape its messages, then walk Telegram forwards outward — one live job, with progress you can watch and stop.
+- 🎯 **Seed search:** Type `@username` or a peer id, pick the hit, and set depth, media, and whether to embed while scraping.
+- 🔭 **Scope:** Drop example images (or a caption, with a multimodal vision model). Rescore the catalog so the next snowball prefers channels that look like those examples.
+- 📚 **Catalogs:** Browse peers, messages, images, videos, and files. Filter, search, open a peer, export a slice.
+- 🧠 **Meaning search:** Once vectors exist, search messages and images by meaning — not just keywords.
+- 🕸️ **Graphs:** Who forwards from whom. Switch to each forwarded message, or to **shared images** — the same photo in two chats even when it was never forwarded.
+- 🖼️ **pHash:** Fingerprint photos so reused media clusters together, alongside vision embeddings.
+- 🧩 **Local models:** Download a vision model (SigLIP / CLIP / MobileNet) and a text model (E5 / BGE) onto disk. Turn embedding off to scrape without them.
+- 💬 **Your session:** Sign in once. Dialogues and profile photos load in the background. Media, models, and the session stay on this machine.
 
 ## Requirements
 
