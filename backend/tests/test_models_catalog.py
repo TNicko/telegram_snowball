@@ -7,7 +7,6 @@ from telegram_snowball.models_catalog import (
     default_selection,
     load_selection,
     mark_model_ready,
-    model_is_ready,
     models_for_slot,
     save_selection,
 )
@@ -22,7 +21,7 @@ def test_defaults_prefer_local_sizes() -> None:
     selected = default_selection()
     assert selected["image"] == "siglip2-base-patch16-256"
     assert selected["text"] == "multilingual-e5-small"
-    assert selected["caption"] == "none"
+    assert "caption" not in selected
 
 
 def test_slot_options_are_smallest_first() -> None:
@@ -32,22 +31,18 @@ def test_slot_options_are_smallest_first() -> None:
         "siglip2-so400m-patch16-256",
         "mobilenet-v3-large",
     ]
+    assert "siglip2-so400m-p16-384" not in [item["id"] for item in models_for_slot("image")]
     assert [item["id"] for item in models_for_slot("text")] == [
         "bge-small-en-v1.5",
         "multilingual-e5-small",
         "bge-m3",
     ]
-    assert [item["id"] for item in models_for_slot("caption")] == [
-        "none",
-        "blip-image-captioning-base",
-    ]
 
 
-def test_none_caption_is_ready(tmp_path: Path) -> None:
+def test_missing_models_are_not_ready(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
-    assert model_is_ready(settings, "none")
     health = models_health(settings)
-    assert health["caption"]["ready"] is True
+    assert "caption" not in health
     assert health["image"]["ready"] is False
     assert health["text"]["ready"] is False
 
@@ -79,6 +74,18 @@ def test_selection_and_ready_marker(tmp_path: Path) -> None:
     assert mobile["group_label"] == "Image-only"
     assert mobile["recommended"] is False
     assert mobile["multimodal"] is False
+    assert "siglip2-so400m-p16-384" not in [item["id"] for item in payload["catalog"]["image"]]
+
+
+def test_imported_siglip384_appears_when_selected(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    save_selection(settings, {"image": "siglip2-so400m-p16-384"})
+    mark_model_ready(settings, "siglip2-so400m-p16-384")
+    payload = models_catalog_payload(settings)
+    imported = next(item for item in payload["catalog"]["image"] if item["id"] == "siglip2-so400m-p16-384")
+    assert imported["selected"] is True
+    assert imported["ready"] is True
+    assert payload["slots"]["image"]["id"] == "siglip2-so400m-p16-384"
 
 
 def test_rejects_wrong_slot(tmp_path: Path) -> None:

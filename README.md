@@ -16,8 +16,8 @@ Crawl  -  Collect  -  Process  -  Analyse
 
 ## What it is
 
-- A **local web app** in Docker (nginx + FastAPI + one worker)
-- **One worker**, **one Telegram session**, **one job at a time**
+- A **local web app** in Docker (nginx + FastAPI + scrape worker + embed sidecar)
+- **One Telegram session** and **one scrape job at a time**; model download/encode run on a separate embed process
 - Postgres (pgvector) for messages, peers, jobs, and graph edges
 - Media, models, and the session secret on a `./data` volume
 - Forward snowball with live progress, catalogs, graphs, pHash, and local text/image embeddings
@@ -45,8 +45,9 @@ Compose services:
 | Service | Role |
 |---|---|
 | `postgres` | Postgres 16 + pgvector (internal only) |
-| `api` | FastAPI on the compose network |
-| `worker` | One process; claims at most one job; one Telethon session |
+| `api` | FastAPI on the compose network (no torch) |
+| `worker` | Scrape process; claims `fetch_dialogues` / `forward_snowball`; one Telethon session |
+| `embed` | Torch sidecar; claims `download_model` / `embed`; HTTP encode for search and snowball |
 | `client` | Static UI on loopback `:8080`, proxies `/api` (including WebSocket login) |
 
 Data that survives restart:
@@ -60,7 +61,7 @@ Stop with Ctrl+C, or `docker compose down`. Add `-v` only if you want to wipe th
 
 Forward snowball jobs default to **embed images** and **embed text** both on. If a toggle is on, that model must be downloaded (READY + weight files under `data/models/<id>/`) or the job is rejected. Turn a toggle off to scrape without embedding.
 
-After scrape, the worker encodes:
+After scrape, the embed sidecar encodes:
 
 - **Message text** with the selected text model (E5 / BGE) into a message-to-message space
 - **Images on disk** (persisted or still in the image cache) with the selected vision model
@@ -69,15 +70,15 @@ CLIP and SigLIP also encode **text queries in the vision space** (text-to-image)
 
 Catalog → Messages / Images has a **Meaning** search once the matching model is ready and vectors exist. Per-peer **Embed remainder** in the peer coverage modal backfills rows that were scraped before models were ready. Image embedding needs the pixels: hash-only images with no file on disk are skipped.
 
-The Home **Models** cards open a picker. Defaults are **SigLIP2 Base** (vision) and **E5 Small multilingual** (message text). Captions are off unless you install BLIP (captioning is not wired yet).
+The Home **Models** cards open a picker. Defaults are **SigLIP2 Base** (vision) and **E5 Small multilingual** (message text).
 
-Downloads go to `data/models/<id>/` via a worker job (one job at a time). Switching the selected text or vision model clears stored vectors for that slot so they are not compared across models.
+Downloads go to `data/models/<id>/` via an **embed-sidecar** job. A download can run while a scrape job is in progress; it does not take the Telegram session. Switching the selected text or vision model clears stored vectors for that slot so they are not compared across models.
 
 ## Contributor install (optional)
 
 `docker compose up` uses Vite HMR for the UI (`docker-compose.override.yml` bind-mounts `client/src`). Saving a client file should refresh in the browser.
 
-API and worker still need an image rebuild after Python changes, or the host path below.
+API, scrape worker, and embed sidecar still need an image rebuild after Python changes, or the host path below.
 
 To serve the static nginx client instead:
 
@@ -93,13 +94,14 @@ cd backend && python3.12 -m venv .venv && source .venv/bin/activate && pip insta
 pytest
 uvicorn telegram_snowball.api.main:app --reload --host 127.0.0.1 --port 8000
 python -m telegram_snowball.worker
+python -m telegram_snowball.embed
 cd ../client && npm install && npm run dev
 ```
 
-Embedding inference in the Compose image uses CPU PyTorch. A host venv needs `pip install -e ".[embed]"` plus a CPU/GPU torch wheel if you run the worker outside Docker.
+Embedding inference lives in the **embed** Compose image (CPU PyTorch). A host venv needs `pip install -e ".[embed]"` plus a CPU/GPU torch wheel if you run the sidecar outside Docker. Point `SNOWBALL_EMBED_URL` at that process (default `http://127.0.0.1:8001`).
 
 Investigators can keep using `docker compose up`.
 
 ## Status
 
-Local collector and analysis workbench: scrape, catalogs, forward/shared-image graphs, pHash, and on-device text/image embeddings. Captions (BLIP) can be downloaded but are not generated yet.
+Local collector and analysis workbench: scrape, catalogs, forward/shared-image graphs, pHash, and on-device text/image embeddings.

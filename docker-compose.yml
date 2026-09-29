@@ -19,6 +19,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: scrape
     environment: &snowball-env
       POSTGRES_DSN: postgresql://${POSTGRES_USER:-snowball}:${POSTGRES_PASSWORD:-snowball}@postgres:5432/${POSTGRES_DB:-snowball}
       SNOWBALL_DATA_DIR: /data
@@ -26,11 +27,17 @@ services:
       SNOWBALL_API_PORT: "8000"
       SNOWBALL_SECRET_KEY: ${SNOWBALL_SECRET_KEY:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SNOWBALL_EMBED_URL: http://embed:8001
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-eu-west-2}
     volumes:
       - ./data:/data
     depends_on:
       postgres:
         condition: service_healthy
+      embed:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 10s
@@ -45,8 +52,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: scrape
     command: ["python", "-m", "telegram_snowball.worker"]
-    environment: *snowball-env
+    environment:
+      <<: *snowball-env
+      SNOWBALL_WORKER_KIND: scrape
     volumes:
       - ./data:/data
     depends_on:
@@ -54,6 +64,34 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+      embed:
+        condition: service_started
+    init: true
+    restart: unless-stopped
+
+  embed:
+    image: telegram-snowball-embed
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: embed
+    command: ["python", "-m", "telegram_snowball.embed"]
+    environment:
+      <<: *snowball-env
+      SNOWBALL_WORKER_KIND: embed
+      SNOWBALL_EMBED_BIND: 0.0.0.0
+      SNOWBALL_EMBED_PORT: "8001"
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     init: true
     restart: unless-stopped
 

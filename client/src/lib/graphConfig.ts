@@ -96,7 +96,7 @@ export const GRAPH_CONFIG = {
     linkVisibilityDistanceRange: [4000, 14000] as [number, number],
     linkVisibilityMinTransparency: 1,
     fitViewDelay: 0,
-    fitViewPadding: 0.18,
+    fitViewPadding: 0.22,
     pointSize: 1.5,
     pointGreyoutColor: '#1a1d26',
     pointGreyoutOpacity: 1.0,
@@ -453,6 +453,10 @@ export function loadStoredGraphView(): GraphViewConfig {
           PREVIOUS_LINK_MIN_TRANSPARENCY.has(parsed.cosmos.linkVisibilityMinTransparency)
             ? base.cosmos.linkVisibilityMinTransparency
             : parsed.cosmos.linkVisibilityMinTransparency,
+        fitViewPadding:
+          parsed.cosmos?.fitViewPadding == null || parsed.cosmos.fitViewPadding === 0.18
+            ? base.cosmos.fitViewPadding
+            : parsed.cosmos.fitViewPadding,
         simulationLinkDistRandomVariationRange: (parsed.cosmos
           ?.simulationLinkDistRandomVariationRange ??
           base.cosmos.simulationLinkDistRandomVariationRange) as [number, number],

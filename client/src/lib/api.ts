@@ -1,4 +1,4 @@
-export type ModelSlot = 'image' | 'text' | 'caption'
+export type ModelSlot = 'image' | 'text'
 
 export type ModelHealth = {
   id: string
@@ -54,7 +54,6 @@ export type AppStatus = {
   models: {
     image: ModelHealth
     text: ModelHealth
-    caption: ModelHealth
   }
   active_job: Job | null
 }
@@ -402,6 +401,31 @@ export type Peer = {
   max_media_bytes?: number | null
   embed_text?: boolean
   embed_images?: boolean
+  scope_score?: number
+  forward_score?: number
+}
+
+export type ScopeInput = {
+  id: string
+  kind: 'text' | 'file'
+  text: string | null
+  filename: string | null
+  content_type: string | null
+  model_id?: string | null
+  created_at: string
+  has_embedding?: boolean
+}
+
+export type ScopeState = {
+  inputs: ScopeInput[]
+  tau: number
+  gamma: number
+  alpha: number
+  delta: number
+  lambda_fwd: number
+  version: number
+  last_rerank_at: string | null
+  needs_rescore?: boolean
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -550,13 +574,37 @@ export const api = {
   },
   job: (id: string) => request<Job>(`/api/jobs/${id}`),
   createJob: (
-    task_type: 'fetch_dialogues' | 'forward_snowball' | 'embed',
+    task_type: 'fetch_dialogues' | 'forward_snowball' | 'embed' | 'scope_rerank',
     params: Record<string, unknown>,
   ) =>
     request<Job>('/api/jobs', {
       method: 'POST',
       body: JSON.stringify({ task_type, params }),
     }),
+  scope: () => request<ScopeState>('/api/scope'),
+  addScopeText: (text: string) =>
+    request<ScopeState & { added: ScopeInput }>('/api/scope/inputs/text', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  addScopeFile: async (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    const response = await fetch('/api/scope/inputs/file', { method: 'POST', body: form })
+    if (!response.ok) {
+      let detail = response.statusText
+      try {
+        const body = (await response.json()) as { detail?: string }
+        if (body.detail) detail = body.detail
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail)
+    }
+    return (await response.json()) as ScopeState & { added: ScopeInput }
+  },
+  removeScopeInput: (id: string) =>
+    request<ScopeState>(`/api/scope/inputs/${id}`, { method: 'DELETE' }),
   searchMessages: (params: { q: string; peer_external_id?: number; limit?: number }) => {
     const query = new URLSearchParams({ q: params.q })
     if (params.peer_external_id != null) query.set('peer_external_id', String(params.peer_external_id))

@@ -21,3 +21,9 @@ backend/.secret_key
 *.session-journal
 .idea/
 .vscode/
+backend/uv.lock
+# Local dual-volume / harvest-import tooling — not part of the public app.
+demo/
+scripts/
+docker-compose.demo.yml
+docker-compose.demo-dual.yml

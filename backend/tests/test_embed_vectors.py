@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from telegram_snowball.embed.runtime import prefix_texts
+from telegram_snowball.embed.runtime import _feature_tensor, prefix_texts
 from telegram_snowball.embed.vectors import VECTOR_WIDTH, pad_unit, vector_literal
 
 
@@ -15,6 +15,13 @@ def test_pad_unit_preserves_cosine() -> None:
     assert pa.shape == (VECTOR_WIDTH,)
     cosine = float(np.dot(pa, pb))
     assert cosine == pytest.approx(1.0, abs=1e-5)
+
+
+def test_pad_unit_accepts_siglip384() -> None:
+    raw = np.ones(1152, dtype=np.float32)
+    padded = pad_unit(raw)
+    assert padded.shape == (VECTOR_WIDTH,)
+    assert padded[1152:].sum() == 0
 
 
 def test_pad_rejects_oversize() -> None:
@@ -38,3 +45,20 @@ def test_bge_query_prefix() -> None:
     out = prefix_texts("bge-small-en-v1.5", ["hello"], is_query=True)
     assert out[0].startswith("Represent this sentence")
     assert prefix_texts("bge-small-en-v1.5", ["hello"], is_query=False) == ["hello"]
+
+
+def test_feature_tensor_unwraps_text_embeds() -> None:
+    class _Tensor:
+        def detach(self) -> "_Tensor":
+            return self
+
+        def cpu(self) -> "_Tensor":
+            return self
+
+    class _ModelOut:
+        text_embeds = _Tensor()
+
+    tensor = _Tensor()
+    _ModelOut.text_embeds = tensor
+    assert _feature_tensor(_ModelOut()) is tensor
+    assert _feature_tensor(tensor) is tensor

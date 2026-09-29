@@ -1,4 +1,4 @@
-"""Unique forward edges plus per-message fan-out, matching messenger's graph tables.
+"""Unique forward edges plus per-message fan-out.
 
 ``forward_edges`` is one row per unique directed pair (from → to) with a running
 ``forward_count``. ``forward_edge_messages`` records each forwarded message so

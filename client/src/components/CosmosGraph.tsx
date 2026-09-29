@@ -59,23 +59,10 @@ type OverlayLabel = {
   scraping: boolean
 }
 
-type ScrapeGlow = {
-  x: number
-  y: number
-}
-
 type LabelCandidate = OverlayLabel & { size: number }
 
 function scrapeNodeIndex(nodes: ForwardGraphNode[]): number {
   return nodes.findIndex((node) => node.kind !== 'message' && node.is_scraping)
-}
-
-function applyScrapeFocus(graph: InstanceType<typeof Graph>, nodes: ForwardGraphNode[]) {
-  const index = scrapeNodeIndex(nodes)
-  graph.setConfig({
-    focusedPointRingColor: GRAPH_CONFIG.colors.scraping,
-    focusedPointIndex: index >= 0 ? index : undefined,
-  })
 }
 
 function applyLinkColors(graph: InstanceType<typeof Graph>, colors: Float32Array) {
@@ -120,7 +107,9 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
   const draggingIdRef = useRef<string | null>(null)
   const labelRafRef = useRef<number | null>(null)
   const simulatingRef = useRef(false)
-  const lastGlowMsRef = useRef(0)
+  const lastFrameMsRef = useRef(0)
+  const userCameraRef = useRef(false)
+  const fittingCameraRef = useRef(false)
   const labelsClearedForSimRef = useRef(false)
   const positionsByIdRef = useRef<Map<string, [number, number]>>(new Map())
   const nodeOrderRef = useRef<string[]>([])
@@ -132,7 +121,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     nodeOrderRef.current = session.nodeOrder
   }
   const [labels, setLabels] = useState<OverlayLabel[]>([])
-  const [scrapeGlow, setScrapeGlow] = useState<ScrapeGlow | null>(null)
 
   if (layoutEpoch !== lastEpochRef.current) {
     nodeOrderRef.current = []
@@ -216,6 +204,19 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     }
   }
 
+  const frameGraph = (duration = 0) => {
+    if (userCameraRef.current) return
+    const g = graphInstanceRef.current
+    if (!g) return
+    fittingCameraRef.current = true
+    g.fitView(duration, Math.max(0.2, viewRef.current.cosmos.fitViewPadding))
+    window.requestAnimationFrame(() => {
+      fittingCameraRef.current = false
+    })
+  }
+  const frameGraphRef = useRef(frameGraph)
+  frameGraphRef.current = frameGraph
+
   const attachSatellites = () => {
     const g = graphInstanceRef.current
     if (!g) return
@@ -240,7 +241,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     appliedPeerKeyRef.current = graphStructureKey(nextPartition.peers, nextPartition.peerEdges)
     attachedRef.current = true
     simulatingRef.current = false
-    applyScrapeFocus(g, fullNodes)
     g.pause()
     g.render(0)
     scheduleLabelRefresh()
@@ -307,7 +307,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       appliedPeerKeyRef.current = graphStructureKey(nextPartition.peers, nextPartition.peerEdges)
       attachedRef.current = true
       simulatingRef.current = true
-      applyScrapeFocus(g, fullNodes)
       g.start(alpha)
       return
     }
@@ -328,7 +327,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     appliedPeerKeyRef.current = graphStructureKey(nextPartition.peers, nextPartition.peerEdges)
     attachedRef.current = false
     simulatingRef.current = true
-    applyScrapeFocus(g, nextPartition.peers)
     g.start(alpha)
   }
   beginPeerSimulationRef.current = beginPeerSimulation
@@ -338,7 +336,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     const wrap = wrapRef.current
     if (!g || !wrap) {
       setLabels([])
-      setScrapeGlow(null)
       return
     }
 
@@ -346,21 +343,19 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     const { maxVisible, offsetY, viewportPaddingPx, minGapPx } = viewRef.current.labels
     const currentNodes = nodesRef.current
     const scrapeIndex = scrapeNodeIndex(currentNodes)
-    const glowOnly = simulatingRef.current
+    const skipLabelsDuringSim = simulatingRef.current
 
     let zoom = 0
     try {
       zoom = g.getZoomLevel()
     } catch {
       setLabels([])
-      setScrapeGlow(null)
       return
     }
 
     const positions = g.getPointPositions()
     if (!positions || positions.length < currentNodes.length * 2) {
       setLabels([])
-      setScrapeGlow(null)
       return
     }
 
@@ -372,21 +367,7 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       x <= width + viewportPaddingPx &&
       y <= height + viewportPaddingPx
 
-    let nextGlow: ScrapeGlow | null = null
-    if (scrapeIndex >= 0) {
-      try {
-        const [gx, gy] = g.spaceToScreenPosition([
-          positions[scrapeIndex * 2],
-          positions[scrapeIndex * 2 + 1],
-        ])
-        if (inView(gx, gy)) nextGlow = { x: gx, y: gy }
-      } catch {
-        // node may be off-space during layout
-      }
-    }
-    setScrapeGlow(nextGlow)
-
-    if (glowOnly) {
+    if (skipLabelsDuringSim) {
       if (!labelsClearedForSimRef.current) {
         labelsClearedForSimRef.current = true
         setLabels([])
@@ -576,11 +557,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       simulationRepulsionTheta: c.simulationRepulsionTheta,
       renderHoveredPointRing: true,
       hoveredPointRingColor: c.hoveredPointRingColor,
-      focusedPointRingColor: GRAPH_CONFIG.colors.scraping,
-      focusedPointIndex: (() => {
-        const index = scrapeNodeIndex(nodesRef.current)
-        return index >= 0 ? index : undefined
-      })(),
       curvedLinks: false,
     }
   }
@@ -652,11 +628,11 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       ? peerIds.length > 0 && peerHits / peerIds.length >= 0.6
       : allIds.length > 0 && allHits / allIds.length >= 0.6
     let settled = restoreSettled
-    let framed = restoreSettled
+    userCameraRef.current = false
     const fitNow = (duration = 0) => {
-      graphInstanceRef.current?.fitView(duration, Math.max(0.16, c.fitViewPadding))
+      frameGraphRef.current(duration)
     }
-    const settleLayout = (fitDuration = 0) => {
+    const settleLayout = () => {
       if (satelliteRef.current) {
         attachSatellitesRef.current()
       } else {
@@ -665,10 +641,7 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
         attachedRef.current = true
       }
       settled = true
-      if (!framed) {
-        framed = true
-        if (fitDuration > 0) fitNow(fitDuration)
-      }
+      fitNow(0)
     }
     const g = new Graph(div, {
       ...cosmosConstructorConfig(viewRef.current),
@@ -697,8 +670,8 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       onDrag: () => {
         if (simulatingRef.current) return
         const now = performance.now()
-        if (now - lastGlowMsRef.current < 80) return
-        lastGlowMsRef.current = now
+        if (now - lastFrameMsRef.current < 80) return
+        lastFrameMsRef.current = now
         scheduleLabelRefresh()
       },
       onDragEnd: () => {
@@ -706,24 +679,23 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
         if (satelliteRef.current && attachedRef.current) syncSatellitePositionsRef.current()
       },
       onZoom: () => {
+        if (!fittingCameraRef.current) userCameraRef.current = true
+        const now = performance.now()
+        if (now - lastFrameMsRef.current < 80) return
+        lastFrameMsRef.current = now
         scheduleLabelRefresh()
       },
       onSimulationTick: (alpha: number) => {
         simulatingRef.current = true
-        const now = performance.now()
-        if (now - lastGlowMsRef.current >= 250) {
-          lastGlowMsRef.current = now
-          scheduleLabelRefresh()
-        }
         if (alpha <= c.simulationStopAlpha) {
           simulatingRef.current = false
-          settleLayout(400)
+          settleLayout()
         }
       },
       onSimulationEnd: () => {
         simulatingRef.current = false
         scheduleLabelRefresh()
-        settleLayout(400)
+        settleLayout()
       },
     })
 
@@ -732,7 +704,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     skipDataRef.current = true
     applyCosmosBuffers(g, cosmosData)
     g.render()
-    applyScrapeFocus(g, simNodes)
     restoreHighlightRef.current()
     fitNow(0)
     if (restoreSettled) {
@@ -747,6 +718,8 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       simulatingRef.current = true
       attachedRef.current = !useSatellite
       g.start(layout.simulationStartAlpha)
+      fitNow(0)
+      window.requestAnimationFrame(() => fitNow(0))
     }
     scheduleLabelRefresh()
 
@@ -769,7 +742,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       graphInstanceRef.current = null
       g.destroy()
       setLabels([])
-      setScrapeGlow(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remountKey])
@@ -839,7 +811,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
         g.setPointSizes(peerData.pointSizes)
         g.setLinkWidths(peerData.linkWidths)
         applyLinkColors(g, peerData.linkColors)
-        applyScrapeFocus(g, partition.peers)
         g.render()
         scheduleLabelRefresh()
         return
@@ -855,7 +826,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
         appliedNodesRef.current = ordered
         appliedEdgesRef.current = edges
         pointIdToIndexRef.current = cosmosData.pointIdToIndex
-        applyScrapeFocus(g, ordered)
         g.render()
       }
       restoreHighlightRef.current()
@@ -879,7 +849,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     pointIdToIndexRef.current = cosmosData.pointIdToIndex
     nodesRef.current = ordered
     edgesRef.current = edges
-    applyScrapeFocus(g, ordered)
     g.render()
     if (grew) {
       simulatingRef.current = true
@@ -911,15 +880,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       }}
     >
       <div ref={graphRef} className={s.canvas} />
-      {scrapeGlow ? (
-        <div
-          className={s.scrapeGlowWrap}
-          style={{ transform: `translate(${scrapeGlow.x}px, ${scrapeGlow.y}px)` }}
-          aria-hidden
-        >
-          <span className={s.scrapeGlow} />
-        </div>
-      ) : null}
       <div className={s.labels} aria-hidden>
         {labels.map((label) => (
           <span

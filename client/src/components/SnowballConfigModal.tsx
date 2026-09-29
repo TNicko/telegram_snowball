@@ -27,6 +27,8 @@ export type SnowballConfigModalProps = {
   textReady: boolean
   /** Home crawl always snowballs; graph scrape defaults to this peer only. */
   snowballChoice?: boolean
+  /** Vision inputs on Home; after the seed, pick depth-1+ peers by forward score. */
+  scopeAvailable?: boolean
   defaultSnowball?: boolean
   title: string
   startLabel: string
@@ -39,6 +41,7 @@ export function SnowballConfigModal({
   busy,
   imageReady,
   textReady,
+  scopeAvailable = false,
   snowballChoice = false,
   defaultSnowball = true,
   title,
@@ -57,11 +60,16 @@ export function SnowballConfigModal({
   const [maxDepth, setMaxDepth] = useState('')
   const [maxBytes, setMaxBytes] = useState('')
   const [snowball, setSnowball] = useState(defaultSnowball)
+  const [useScope, setUseScope] = useState(scopeAvailable && imageReady)
   const rangeSelected = Boolean(dateRange?.from && dateRange?.to)
 
   useEffect(() => {
     setEmbedImages(imageReady)
   }, [imageReady])
+
+  useEffect(() => {
+    setUseScope(scopeAvailable && imageReady)
+  }, [scopeAvailable, imageReady])
 
   useEffect(() => {
     setEmbedText(textReady)
@@ -92,6 +100,7 @@ export function SnowballConfigModal({
       participants,
       embed_images: imageReady && embedImages,
       embed_text: textReady && embedText,
+      use_scope: Boolean(scopeAvailable && imageReady && embedImages && useScope),
       date_from: rangeSelected && dateRange?.from ? startOfDayIso(dateRange.from) : null,
       date_to: rangeSelected && dateRange?.to ? endOfDayIso(dateRange.to) : null,
       restrict_date_range: rangeSelected && restrictRange,
@@ -131,7 +140,7 @@ export function SnowballConfigModal({
           </label>
         ) : null}
 
-        <DateRangeField value={dateRange} onChange={setDateRange} />
+        <DateRangeField value={dateRange} onChange={setDateRange} popoverZIndex={90} />
         {rangeSelected ? (
           <label className={h.option}>
             <input
@@ -182,6 +191,19 @@ export function SnowballConfigModal({
             </span>
           )}
         </label>
+        {scopeAvailable ? (
+          <label className={`${h.option}${imageReady && embedImages ? '' : ` ${h.optionDisabled}`}`}>
+            <input
+              type="checkbox"
+              checked={useScope && imageReady && embedImages}
+              disabled={!imageReady || !embedImages}
+              onChange={(event) => setUseScope(event.target.checked)}
+            />
+            <InfoTip text="After the first channel is scraped, prefer forwarded communities that match your Scope inputs instead of visiting them in first-seen order.">
+              Steer by scope
+            </InfoTip>
+          </label>
+        ) : null}
         <label className={`${h.option}${textReady ? '' : ` ${h.optionDisabled}`}`}>
           <input
             type="checkbox"

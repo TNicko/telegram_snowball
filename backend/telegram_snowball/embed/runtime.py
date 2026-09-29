@@ -36,8 +36,8 @@ def _require_transformers() -> None:
         import torch  # noqa: F401
     except ImportError as exc:
         raise EncoderError(
-            "Embedding runtime is not installed. Rebuild the Docker image so the "
-            "worker has torch + transformers."
+            "Embedding runtime is not installed. Rebuild the embed sidecar image "
+            "so it has torch + transformers."
         ) from exc
 
 
@@ -57,12 +57,26 @@ def _as_pil(data: bytes) -> Image.Image:
 
 
 def _mean_pool(last_hidden: Any, attention_mask: Any) -> Any:
-    import torch
-
     mask = attention_mask.unsqueeze(-1).expand(last_hidden.size()).to(last_hidden.dtype)
     summed = (last_hidden * mask).sum(dim=1)
     counts = mask.sum(dim=1).clamp(min=1e-9)
     return summed / counts
+
+
+def _feature_tensor(out: Any) -> Any:
+    """CLIP/SigLIP helpers may return a ModelOutput instead of a bare tensor."""
+    if hasattr(out, "detach") and hasattr(out, "cpu"):
+        return out
+    for key in ("text_embeds", "image_embeds", "pooler_output"):
+        value = getattr(out, key, None)
+        if value is not None and hasattr(value, "detach"):
+            return value
+    hidden = getattr(out, "last_hidden_state", None)
+    if hidden is not None and hasattr(hidden, "detach"):
+        if getattr(hidden, "ndim", 0) == 3:
+            return hidden[:, 0]
+        return hidden
+    raise EncoderError(f"model did not return a feature tensor (got {type(out).__name__})")
 
 
 def prefix_texts(model_id: str, texts: list[str], *, is_query: bool) -> list[str]:
@@ -125,10 +139,9 @@ class LoadedEncoder:
                 )
                 inputs = {key: value.to(self.device) for key, value in inputs.items()}
                 if hasattr(self.model, "get_text_features"):
-                    feats = self.model.get_text_features(**inputs)
+                    feats = _feature_tensor(self.model.get_text_features(**inputs))
                 else:
-                    out = self.model(**inputs)
-                    feats = out.pooler_output if getattr(out, "pooler_output", None) is not None else out.last_hidden_state[:, 0]
+                    feats = _feature_tensor(self.model(**inputs))
         else:
             if self.tokenizer is None:
                 raise EncoderError("text tokenizer missing")
@@ -146,7 +159,7 @@ class LoadedEncoder:
                     feats = out.pooler_output
                 else:
                     feats = _mean_pool(out.last_hidden_state, inputs["attention_mask"])
-        cpu = feats.detach().float().cpu().numpy()
+        cpu = _feature_tensor(feats).detach().float().cpu().numpy()
         return [cpu[i] for i in range(cpu.shape[0])]
 
     def encode_images(self, payloads: list[bytes]) -> list[np.ndarray]:
@@ -165,7 +178,7 @@ class LoadedEncoder:
                 inputs = self.processor(images, return_tensors="pt")
             inputs = {key: value.to(self.device) for key, value in inputs.items() if hasattr(value, "to")}
             if hasattr(self.model, "get_image_features"):
-                feats = self.model.get_image_features(**inputs)
+                feats = _feature_tensor(self.model.get_image_features(**inputs))
             else:
                 out = self.model(**inputs, output_hidden_states=True)
                 hidden = getattr(out, "last_hidden_state", None)
@@ -179,15 +192,13 @@ class LoadedEncoder:
                     feats = hidden.mean(dim=1)
                 else:
                     feats = hidden
-        cpu = feats.detach().float().cpu().numpy()
+        cpu = _feature_tensor(feats).detach().float().cpu().numpy()
         return [cpu[i] for i in range(cpu.shape[0])]
 
 
 def load_encoder(settings: Settings, slot: str) -> LoadedEncoder:
     selected = load_selection(settings)
     model_id = selected[slot]  # type: ignore[index]
-    if slot == "caption":
-        raise EncoderError("captioning is not an embedding slot")
     if not model_is_ready(settings, model_id):
         spec = catalog_by_id(model_id)
         raise EncoderError(f"{spec['label']} is not ready. Download it from Home → Models.")

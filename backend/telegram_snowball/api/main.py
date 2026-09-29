@@ -17,6 +17,7 @@ from telegram_snowball.api.routes import (
     jobs,
     messages,
     models,
+    scope,
     search,
     setup,
     status,
@@ -39,8 +40,8 @@ app = FastAPI(title="Telegram Snowball", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://127.0.0.1:8080",
-        "http://localhost:8080",
+        "http://127.0.0.1:8081",
+        "http://localhost:8081",
         "http://127.0.0.1:5173",
         "http://localhost:5173",
         "http://127.0.0.1:80",
@@ -64,6 +65,7 @@ app.include_router(files.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(graph.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
+app.include_router(scope.router, prefix="/api")
 
 
 def run() -> None:

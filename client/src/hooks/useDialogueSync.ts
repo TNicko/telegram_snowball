@@ -96,14 +96,20 @@ function subscribe() {
     pollGeneration += 1
     const generation = pollGeneration
     void api
-      .syncDialogues()
+      .peers()
       .then((res) => {
         if (generation !== pollGeneration) return
+        emit({ peers: res.peers, ready: true, error: null })
+        if (res.peers.length > 0) return null
+        return api.syncDialogues()
+      })
+      .then((res) => {
+        if (!res || generation !== pollGeneration) return
         if (isDialogueJob(res.job)) emit({ job: res.job })
       })
       .catch((err: Error) => {
         if (generation !== pollGeneration) return
-        emit({ error: err.message })
+        emit({ error: err.message, ready: true })
       })
     tick(generation)
     timer = window.setInterval(() => tick(generation), 1000)

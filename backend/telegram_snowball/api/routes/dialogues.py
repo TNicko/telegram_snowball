@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 from telegram_snowball.catalog import attach_catalog_stats, load_catalog_stats, load_peer_coverage
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import get_conn
+from telegram_snowball.jobs.lanes import live_job_in_lane
 from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.telegram.profile_photos import sniff_profile_media
 
@@ -25,13 +26,20 @@ def public_peer(row: dict[str, Any], *, data_dir: Any | None = None) -> dict[str
         kind = sniffed or kind
     out["photo_media_kind"] = kind if kind in ("image", "video") else None
     out["photo_url"] = f"/api/peers/{out['external_id']}/photo" if out["photo_media_kind"] else None
+    for key in ("scope_score", "forward_score"):
+        raw = out.get(key)
+        try:
+            out[key] = round(float(raw), 4) if raw is not None else 0.0
+        except (TypeError, ValueError):
+            out[key] = 0.0
     return out
 
 
 PUBLIC_PEER_COLUMNS = """
     external_id, peer_type, title, username, about, participants_count,
     photo_path, photo_media_kind, is_scraping, scrape_detail, messages_scraped,
-    last_message_id, last_message_at, created_at, updated_at
+    last_message_id, last_message_at, created_at, updated_at,
+    scope_score, forward_score
 """
 
 
@@ -110,7 +118,9 @@ async def peer_photo(external_id: int) -> FileResponse:
 async def sync_dialogues(force: bool = False) -> dict[str, Any]:
     """Queue peer-only dialogue materialize if one is not already active or done.
 
-    Pass force=true to queue another pass after a successful sync (new chats).
+    Skips when a successful sync exists, or when peers are already stored
+    (fresh restore keeps dialogues and truncates jobs). Pass force=true to
+    queue another pass for new chats.
     """
     settings = load_settings()
     async with get_conn(settings) as conn:
@@ -118,20 +128,11 @@ async def sync_dialogues(force: bool = False) -> dict[str, Any]:
         if await session.fetchone() is None:
             raise HTTPException(status_code=400, detail="Connect a Telegram account first.")
 
-        active = await conn.execute(
-            """
-            SELECT id, task_type, status, params, progress, error, created_at, started_at, finished_at
-            FROM jobs
-            WHERE status IN ('queued', 'running')
-            ORDER BY created_at DESC
-            LIMIT 1
-            """
-        )
-        current = await active.fetchone()
+        current = await live_job_in_lane(conn, "scrape")
         if current is not None:
             if current["task_type"] == "fetch_dialogues":
-                return {"started": False, "job": dict(current)}
-            return {"started": False, "blocked": True, "job": dict(current)}
+                return {"started": False, "job": current}
+            return {"started": False, "blocked": True, "job": current}
 
         if not force:
             done = await conn.execute(
@@ -147,6 +148,13 @@ async def sync_dialogues(force: bool = False) -> dict[str, Any]:
             finished = await done.fetchone()
             if finished is not None:
                 return {"started": False, "job": dict(finished)}
+
+            # Restore / fresh dump keeps dialogue peers but truncates jobs.
+            # Do not hit Telegram again just because the success row is gone.
+            stored = await conn.execute("SELECT EXISTS (SELECT 1 FROM peers LIMIT 1) AS has_peers")
+            has_peers = await stored.fetchone()
+            if has_peers is not None and has_peers["has_peers"]:
+                return {"started": False, "job": None}
 
         params = {"mode": "materialize", "messages": False, "participants": False}
         inserted = await conn.execute(

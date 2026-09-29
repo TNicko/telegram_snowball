@@ -51,7 +51,7 @@ def _largest_thumb(photo: Photo) -> Any | None:
 
 
 def resolve_profile_photo_variant(photo: Photo) -> tuple[str, str, str]:
-    """Return ``(ext, content_type, media_kind)`` — same rules as messenger."""
+    """Return ``(ext, content_type, media_kind)``."""
     thumb = _largest_thumb(photo)
     if isinstance(thumb, VideoSize):
         return "mp4", "video/mp4", "video"

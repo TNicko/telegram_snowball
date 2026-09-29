@@ -354,7 +354,7 @@ export function MessagesCatalogExport({
       <PeerPick peer={selected} onChange={setSelected} />
       <div className={s.block}>
         <span className={s.label}>Date range</span>
-        <DateRangeField value={range} onChange={setRange} />
+        <DateRangeField value={range} onChange={setRange} popoverZIndex={90} />
       </div>
       <label className={s.check}>
         <input type="checkbox" checked={textOnly} onChange={(event) => setTextOnly(event.target.checked)} />

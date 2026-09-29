@@ -4,8 +4,7 @@ Vision models (CLIP / SigLIP) encode images *and* text into one space, which is
 what multimodal search needs. MobileNet is an image-only CNN in the same vision
 slot: visual similarity, no text-to-image. Message-text models (E5 / BGE) are a
 separate space for message-to-message similarity. Mixing those two spaces is not
-a search. Captions are optional: they turn an image into words, then the text
-model can search those words. They are not required if a vision model is ready.
+a search.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from typing import Any, Literal
 
 from telegram_snowball.config import Settings
 
-Slot = Literal["image", "text", "caption"]
+Slot = Literal["image", "text"]
 
 SELECTED_FILENAME = "selected.json"
 
@@ -52,6 +51,22 @@ MODELS: list[dict[str, Any]] = [
         "recommended": True,
         "group": "multimodal",
         "group_label": "Vision-language",
+    },
+    {
+        "id": "siglip2-so400m-p16-384",
+        "slot": "image",
+        "label": "SigLIP2 So400m 384",
+        "hf_id": None,
+        "license": "Apache-2.0",
+        "default": False,
+        "download_gb": 0,
+        "ram_gb": 0,
+        "vram_gb": 0,
+        "hardware": "Imported 1152-d vectors (no local weights)",
+        "purpose": "Hidden imported-vector slot. Not the downloadable So400m 256 model.",
+        "group": "multimodal",
+        "group_label": "Vision-language",
+        "hidden": True,
     },
     {
         "id": "siglip2-so400m-patch16-256",
@@ -122,35 +137,9 @@ MODELS: list[dict[str, Any]] = [
         "hardware": "16 GB RAM, or a 6 GB GPU",
         "purpose": "Highest quality message matching, including long posts. Heavy as a default.",
     },
-    {
-        "id": "none",
-        "slot": "caption",
-        "label": "No captions",
-        "hf_id": None,
-        "license": None,
-        "default": True,
-        "download_gb": 0,
-        "ram_gb": 0,
-        "vram_gb": 0,
-        "hardware": "",
-        "purpose": "",
-    },
-    {
-        "id": "blip-image-captioning-base",
-        "slot": "caption",
-        "label": "BLIP Base",
-        "hf_id": "Salesforce/blip-image-captioning-base",
-        "license": "BSD-3-Clause",
-        "default": False,
-        "download_gb": 1.0,
-        "ram_gb": 4,
-        "vram_gb": 2,
-        "hardware": "8 GB RAM, or a 4 GB GPU",
-        "purpose": "",
-    },
 ]
 
-SLOTS: tuple[Slot, ...] = ("image", "text", "caption")
+SLOTS: tuple[Slot, ...] = ("image", "text")
 
 # Vision: CLIP / SigLIP first (smallest to largest), then image-only alternatives.
 _GROUP_RANK = {"multimodal": 0, "image_only": 1}
@@ -171,10 +160,6 @@ SLOT_COPY: dict[Slot, dict[str, str]] = {
             "It cannot be compared to vision vectors."
         ),
     },
-    "caption": {
-        "title": "Captions",
-        "blurb": "Select a captioning model based on your use case and hardware.",
-    },
 }
 
 
@@ -185,9 +170,13 @@ def catalog_by_id(model_id: str) -> dict[str, Any]:
     raise KeyError(model_id)
 
 
-def models_for_slot(slot: Slot) -> list[dict[str, Any]]:
+def models_for_slot(slot: Slot, *, include_hidden: bool = False) -> list[dict[str, Any]]:
     return sorted(
-        (item for item in MODELS if item["slot"] == slot),
+        (
+            item
+            for item in MODELS
+            if item["slot"] == slot and (include_hidden or not item.get("hidden"))
+        ),
         key=lambda item: (
             _GROUP_RANK.get(str(item.get("group") or ""), 0),
             float(item["download_gb"]),

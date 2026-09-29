@@ -49,29 +49,3 @@
   color: #efffef;
   background: color-mix(in srgb, var(--graph-scraping-color, #7dff6a) 22%, transparent);
 }
-
-.scrapeGlowWrap {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 2;
-  pointer-events: none;
-  will-change: transform;
-}
-
-.scrapeGlow {
-  display: block;
-  width: 22px;
-  height: 22px;
-  margin-left: -11px;
-  margin-top: -11px;
-  border-radius: 999px;
-  pointer-events: none;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--graph-scraping-color, #7dff6a) 8%, transparent) 0%,
-    color-mix(in srgb, var(--graph-scraping-color, #7dff6a) 28%, transparent) 45%,
-    transparent 72%
-  );
-  box-shadow: 0 0 7px 2px color-mix(in srgb, var(--graph-scraping-color, #7dff6a) 32%, transparent);
-}

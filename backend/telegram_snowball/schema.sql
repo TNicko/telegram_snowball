@@ -300,3 +300,76 @@ CREATE INDEX IF NOT EXISTS messages_text_embed_pending_idx
 CREATE INDEX IF NOT EXISTS image_blobs_embed_pending_idx
     ON image_blobs (phash)
     WHERE image_embedded = false;
+
+-- Scope: vision-space steering. Scores live on peers; inputs are user prompts/files.
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS scope_r DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS scope_j INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS scope_score DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS forward_r DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS forward_j INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS forward_n_events INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE peers ADD COLUMN IF NOT EXISTS forward_score DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS peers_scope_score_idx ON peers (scope_score DESC);
+CREATE INDEX IF NOT EXISTS peers_forward_score_idx ON peers (forward_score DESC);
+
+CREATE TABLE IF NOT EXISTS scope_state (
+    id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    tau DOUBLE PRECISION NOT NULL DEFAULT 0.4,
+    gamma DOUBLE PRECISION NOT NULL DEFAULT 2.0,
+    alpha DOUBLE PRECISION NOT NULL DEFAULT 2.0,
+    delta DOUBLE PRECISION NOT NULL DEFAULT 0.15,
+    lambda_fwd DOUBLE PRECISION NOT NULL DEFAULT 0.05,
+    version INTEGER NOT NULL DEFAULT 0,
+    last_rerank_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO scope_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS scope_inputs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind TEXT NOT NULL CHECK (kind IN ('text', 'file')),
+    body TEXT NOT NULL,
+    filename TEXT,
+    content_type TEXT,
+    embedding vector(1280),
+    model_id TEXT,
+    dim SMALLINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS image_scope_scores (
+    phash TEXT PRIMARY KEY REFERENCES image_blobs (phash) ON DELETE CASCADE,
+    s DOUBLE PRECISION NOT NULL,
+    r DOUBLE PRECISION NOT NULL,
+    version INTEGER NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT image_scope_scores_phash_hex_chk CHECK (phash ~ '^[0-9a-f]{16}$')
+);
+
+CREATE INDEX IF NOT EXISTS image_scope_scores_version_idx ON image_scope_scores (version);
+
+-- Unique phashes credited to a peer's scrape (scope) or origin (forward) mix.
+CREATE TABLE IF NOT EXISTS peer_scope_evidence (
+    peer_external_id BIGINT NOT NULL REFERENCES peers (external_id) ON DELETE CASCADE,
+    pile TEXT NOT NULL CHECK (pile IN ('scope', 'forward')),
+    phash TEXT NOT NULL,
+    PRIMARY KEY (peer_external_id, pile, phash),
+    CONSTRAINT peer_scope_evidence_phash_hex_chk CHECK (phash ~ '^[0-9a-f]{16}$')
+);
+
+CREATE INDEX IF NOT EXISTS peer_scope_evidence_pile_idx
+    ON peer_scope_evidence (pile, phash);
+
+-- One row per forwarded image occurrence, so events stay idempotent on re-score.
+CREATE TABLE IF NOT EXISTS peer_scope_forward_events (
+    origin_peer_id BIGINT NOT NULL REFERENCES peers (external_id) ON DELETE CASCADE,
+    message_id UUID NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    phash TEXT NOT NULL,
+    PRIMARY KEY (message_id, phash),
+    CONSTRAINT peer_scope_forward_events_phash_hex_chk CHECK (phash ~ '^[0-9a-f]{16}$')
+);
+
+CREATE INDEX IF NOT EXISTS peer_scope_forward_events_origin_idx
+    ON peer_scope_forward_events (origin_peer_id);

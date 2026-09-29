@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Star } from 'lucide-react'
 import { LoadingText } from './LoadingText'
 import type { ModelCatalog, ModelHealth, ModelSlot } from '../lib/api'
+import { modelDownloadProgressLabel } from '../lib/format'
 import h from '../pages/HomePage.module.css'
 
 type Props = {
@@ -51,8 +52,9 @@ export function ModelSetupModal({
   const download = catalog.download
   const downloadingId =
     download && typeof download.params?.model_id === 'string' ? download.params.model_id : null
-  const downloadDetail =
-    download && typeof download.progress?.detail === 'string' ? download.progress.detail : null
+  const downloadDetail = download
+    ? modelDownloadProgressLabel(download.progress as Record<string, unknown> | null)
+    : null
 
   return (
     <div className="modalScrim" onClick={onClose}>
@@ -76,6 +78,9 @@ export function ModelSetupModal({
                   key={item.id}
                   className={`${h.modelChoice}${item.id === picked ? ` ${h.modelChoiceOn}` : ''}`}
                 >
+                  {item.id === selected?.id && selected.ready ? (
+                    <span className={h.modelChoiceActive}>active</span>
+                  ) : null}
                   <input
                     type="radio"
                     name={`model-${slot}`}
@@ -129,24 +134,18 @@ export function ModelSetupModal({
               Use {current.label}
             </button>
           ) : null}
-          {current && !current.ready && current.id !== 'none' ? (
+          {current && !current.ready ? (
             <button
               type="button"
               className="btn btnPrimary"
               disabled={busy || downloadingId != null}
               onClick={() => onDownload(current.id)}
             >
-              {downloadingId === current.id ? 'Downloading…' : `Download ${current.label}`}
-            </button>
-          ) : null}
-          {current?.id === 'none' && selected?.id !== 'none' ? (
-            <button
-              type="button"
-              className="btn btnPrimary"
-              disabled={busy}
-              onClick={() => onSelect('none')}
-            >
-              Don’t use captions
+              {downloadingId === current.id
+                ? modelDownloadProgressLabel(download?.progress as Record<string, unknown> | null, {
+                    compact: true,
+                  })
+                : `Download ${current.label}`}
             </button>
           ) : null}
         </div>

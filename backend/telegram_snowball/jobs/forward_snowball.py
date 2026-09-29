@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -63,6 +63,7 @@ class FrontierItem:
     peer_id: int
     depth: int
     via_peer_id: int | None = None
+    retry: bool = False
 
 
 def _signed_from_peer(peer: Any) -> int | None:
@@ -279,6 +280,27 @@ async def _enqueue_forward_source(
     pending.add(dst_peer_id)
     frontier.append(FrontierItem(dst_peer_id, depth + 1, src_peer_id))
     return True
+
+
+async def _pop_frontier(
+    conn: Any,
+    frontier: deque[FrontierItem],
+    *,
+    use_scope: bool,
+) -> FrontierItem:
+    from telegram_snowball.scope.score import pick_frontier_index
+    from telegram_snowball.scope.store import load_forward_scores
+
+    items = list(frontier)
+    need_scores = use_scope and not any(item.retry or item.depth == 0 for item in items)
+    scores: dict[int, float] = {}
+    if need_scores:
+        scores = await load_forward_scores(conn, [item.peer_id for item in items])
+    idx = pick_frontier_index(items, scores, use_scope=use_scope)
+    item = items.pop(idx)
+    frontier.clear()
+    frontier.extend(items)
+    return item
 
 
 async def _harvest_image(
@@ -556,6 +578,7 @@ async def run_forward_snowball(
     include_videos = bool(params.get("videos", False))
     embed_images = bool(params.get("embed_images", True))
     embed_text = bool(params.get("embed_text", True))
+    use_scope = bool(params.get("use_scope", False)) and embed_images
     fill_remaining = bool(params.get("fill_remaining", False))
     remainder = str(params.get("remainder") or "")
     date_from = _parse_job_datetime(params.get("date_from"))
@@ -570,6 +593,7 @@ async def run_forward_snowball(
             "seed_external_id": seed,
             "embed_images": embed_images,
             "embed_text": embed_text,
+            "use_scope": use_scope,
             "detail": "Opening Telegram session",
         },
     )
@@ -585,7 +609,7 @@ async def run_forward_snowball(
     async with telegram_client(settings) as client:
         while frontier:
             await raise_if_cancelled(conn, job_id)
-            item = frontier.popleft()
+            item = await _pop_frontier(conn, frontier, use_scope=use_scope)
             peer_id, depth, via_peer_id = item.peer_id, item.depth, item.via_peer_id
             pending.discard(peer_id)
             if peer_id in visited:
@@ -623,7 +647,7 @@ async def run_forward_snowball(
             except FloodWaitError as err:
                 await asyncio.sleep(int(err.seconds) + 1)
                 pending.add(peer_id)
-                frontier.appendleft(item)
+                frontier.appendleft(replace(item, retry=True))
                 visited.discard(peer_id)
                 continue
 
@@ -651,7 +675,7 @@ async def run_forward_snowball(
             except FloodWaitError as err:
                 await asyncio.sleep(int(err.seconds) + 1)
                 pending.add(peer_id)
-                frontier.appendleft(item)
+                frontier.appendleft(replace(item, retry=True))
                 visited.discard(peer_id)
                 continue
 
@@ -885,15 +909,33 @@ async def run_forward_snowball(
                         "detail": f"Embedding {entity_label(entity)}",
                     },
                 )
-                from telegram_snowball.jobs.embed import embed_peer_pending
+                from telegram_snowball.embed.client import EmbedUnavailable, embed_peer
+                from telegram_snowball.embed.runtime import EncoderError
 
-                await embed_peer_pending(
-                    conn,
-                    settings,
-                    job_id=job_id,
-                    peer_external_id=peer_id,
-                    text=embed_text,
-                    images=embed_images,
+                try:
+                    await embed_peer(
+                        settings,
+                        job_id=job_id,
+                        peer_external_id=peer_id,
+                        text=embed_text,
+                        images=embed_images,
+                    )
+                except EncoderError as exc:
+                    raise RuntimeError(str(exc)) from exc
+                except EmbedUnavailable as exc:
+                    raise RuntimeError(str(exc)) from exc
+            if use_scope and embed_images:
+                from telegram_snowball.scope.update import score_after_peer_embed
+
+                await raise_if_cancelled(conn, job_id)
+                scored = await score_after_peer_embed(conn, peer_external_id=peer_id)
+                await conn.commit()
+                lg.info(
+                    "scope scored peer %s images=%s origins=%s frontier=%s",
+                    peer_id,
+                    scored.get("images"),
+                    scored.get("origins"),
+                    len(frontier),
                 )
             await update_job_progress(
                 conn,

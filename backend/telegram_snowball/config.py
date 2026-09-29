@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     snowball_bind: str = "127.0.0.1"
     snowball_api_port: int = 8000
+    snowball_embed_url: str = "http://127.0.0.1:8001"
+    snowball_embed_bind: str = "127.0.0.1"
+    snowball_embed_port: int = 8001
+    snowball_worker_kind: str = "scrape"
 
     @property
     def data_dir(self) -> Path:
@@ -28,6 +32,7 @@ class Settings(BaseSettings):
         (path / "blobs" / "images").mkdir(parents=True, exist_ok=True)
         (path / "cache" / "images").mkdir(parents=True, exist_ok=True)
         (path / "tmp" / "media").mkdir(parents=True, exist_ok=True)
+        (path / "scope").mkdir(parents=True, exist_ok=True)
         return path
 
 

@@ -62,7 +62,9 @@ async def get_status() -> dict:
             SELECT id, task_type, status, params, progress, error, created_at, started_at, finished_at
             FROM jobs
             WHERE status IN ('queued', 'running')
-            ORDER BY created_at DESC
+            ORDER BY
+              CASE WHEN task_type IN ('fetch_dialogues', 'forward_snowball') THEN 0 ELSE 1 END,
+              created_at DESC
             LIMIT 1
             """
         )

@@ -23,6 +23,7 @@ dependencies = [
     "numpy>=2.0.0",
     "scipy>=1.14.0",
     "huggingface_hub>=0.26.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +37,7 @@ dev = ["ruff", "mypy", "pytest", "pytest-asyncio"]
 [project.scripts]
 snowball-api = "telegram_snowball.api.main:run"
 snowball-worker = "telegram_snowball.worker.__main__:main"
+snowball-embed = "telegram_snowball.embed.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["telegram_snowball*"]

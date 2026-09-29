@@ -11,13 +11,14 @@ from telegram_snowball.api.routes.dialogues import PUBLIC_PEER_COLUMNS, load_pub
 from telegram_snowball.catalog import stored_kind_is
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import get_conn
+from telegram_snowball.jobs.lanes import lane_for, live_conflict_detail, live_job_in_lane
 from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.models_health import EmbeddingGateError, assert_snowball_embed_gate
 from telegram_snowball.telegram.ids import infer_peer_id_kind
 
 router = APIRouter()
 
-TaskType = Literal["fetch_dialogues", "forward_snowball", "embed"]
+TaskType = Literal["fetch_dialogues", "forward_snowball", "embed", "scope_rerank"]
 
 
 class CreateJobIn(BaseModel):
@@ -34,8 +35,10 @@ def _normalize_snowball_params(params: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("messages", True)
     out.setdefault("participants", False)
     out.setdefault("restrict_date_range", False)
+    out.setdefault("use_scope", False)
     out["embed_images"] = bool(out["embed_images"])
     out["embed_text"] = bool(out["embed_text"])
+    out["use_scope"] = bool(out["use_scope"])
     for key in ("date_from", "date_to"):
         value = out.get(key)
         iso = getattr(value, "isoformat", None)
@@ -257,9 +260,10 @@ async def cancel_job(job_id: UUID) -> dict[str, Any]:
             if found is None:
                 raise HTTPException(status_code=404, detail="Job not found")
             raise HTTPException(status_code=409, detail=f"Job is {found['status']} and cannot be stopped.")
-        await conn.execute(
-            "UPDATE peers SET is_scraping = false, scrape_detail = NULL WHERE is_scraping = true"
-        )
+        if lane_for(job["task_type"]) == "scrape":
+            await conn.execute(
+                "UPDATE peers SET is_scraping = false, scrape_detail = NULL WHERE is_scraping = true"
+            )
         await conn.commit()
         jobs = await _attach_seed_peers(conn, [dict(job)], data_dir=settings.data_dir)
         jobs = await _attach_job_stats(conn, jobs)
@@ -274,14 +278,9 @@ async def create_job(body: CreateJobIn) -> dict[str, Any]:
         session = await conn.execute("SELECT id FROM telegram_sessions LIMIT 1")
         if await session.fetchone() is None:
             raise HTTPException(status_code=400, detail="Connect a Telegram account first.")
-        running = await conn.execute(
-            "SELECT id FROM jobs WHERE status IN ('queued', 'running') LIMIT 1"
-        )
-        if await running.fetchone():
-            raise HTTPException(
-                status_code=409,
-                detail="A job is already queued or running. v1 runs one worker / one job at a time.",
-            )
+        lane = lane_for(body.task_type)
+        if await live_job_in_lane(conn, lane):
+            raise HTTPException(status_code=409, detail=live_conflict_detail(lane))
 
         if body.task_type == "fetch_dialogues":
             params.setdefault("mode", "materialize")
@@ -296,6 +295,11 @@ async def create_job(body: CreateJobIn) -> dict[str, Any]:
                 assert_snowball_embed_gate(settings, params)
             except EmbeddingGateError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if params.get("use_scope") and not params.get("embed_images"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Steer by scope needs image embedding on.",
+                )
 
         if body.task_type == "embed":
             targets = params.get("targets") or ["text", "images"]
@@ -330,45 +334,70 @@ class SeedResolveIn(BaseModel):
     query: str = Field(..., min_length=1)
 
 
+async def _local_seed_peer(conn: Any, query: str, kind: str) -> dict[str, Any] | None:
+    if kind == "peer_id":
+        row = await conn.execute(
+            """
+            SELECT external_id, username
+            FROM peers WHERE external_id = %s
+            """,
+            (int(query),),
+        )
+        hit = await row.fetchone()
+        if hit is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "That looks like a peer id, but it is not in this account's dialogues. "
+                    "Telegram cannot look up a bare id. Wait for dialogues to finish loading, or use a username."
+                ),
+            )
+        return dict(hit)
+    row = await conn.execute(
+        """
+        SELECT external_id, username
+        FROM peers
+        WHERE lower(username) = lower(%s)
+        LIMIT 1
+        """,
+        (query,),
+    )
+    hit = await row.fetchone()
+    if hit is not None:
+        return dict(hit)
+    row = await conn.execute(
+        """
+        SELECT external_id, username
+        FROM peers
+        WHERE usernames IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(usernames) AS handle
+            WHERE lower(handle->>'username') = lower(%s)
+          )
+        LIMIT 1
+        """,
+        (query,),
+    )
+    hit = await row.fetchone()
+    return dict(hit) if hit is not None else None
+
+
 @router.post("/snowball/resolve")
 async def resolve_seed(body: SeedResolveIn) -> dict[str, Any]:
-    """Resolve a seed by username or stored peer id, then materialize full + profile photo."""
+    """Resolve a seed from the local catalog, or from Telegram if it is not stored yet."""
     settings = load_settings()
     query = body.query.strip().lstrip("@")
     kind = infer_peer_id_kind(query)
     stored: dict[str, Any] | None = None
     async with get_conn(settings) as conn:
-        if kind == "peer_id":
-            row = await conn.execute(
-                """
-                SELECT external_id, username
-                FROM peers WHERE external_id = %s
-                """,
-                (int(query),),
+        stored = await _local_seed_peer(conn, query, kind)
+        if stored is not None:
+            peer = await load_public_peer(
+                conn, int(stored["external_id"]), data_dir=settings.data_dir
             )
-            hit = await row.fetchone()
-            if hit is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        "That looks like a peer id, but it is not in this account's dialogues. "
-                        "Telegram cannot look up a bare id. Wait for dialogues to finish loading, or use a username."
-                    ),
-                )
-            stored = dict(hit)
-        else:
-            row = await conn.execute(
-                """
-                SELECT external_id, username
-                FROM peers
-                WHERE lower(username) = lower(%s)
-                LIMIT 1
-                """,
-                (query,),
-            )
-            hit = await row.fetchone()
-            if hit is not None:
-                stored = dict(hit)
+            if peer is not None:
+                return {"peer": peer, "resolved": False}
 
     from telethon.errors import (
         ChannelPrivateError,
@@ -380,11 +409,7 @@ async def resolve_seed(body: SeedResolveIn) -> dict[str, Any]:
     from telegram_snowball.telegram.client import telegram_client
     from telegram_snowball.telegram.materialize import materialize_peer
 
-    if kind == "peer_id":
-        assert stored is not None
-        lookup: str | int = stored["username"] or stored["external_id"]
-    else:
-        lookup = query
+    lookup: str | int = query
     try:
         async with telegram_client(settings) as client:
             entity = await client.get_entity(lookup)

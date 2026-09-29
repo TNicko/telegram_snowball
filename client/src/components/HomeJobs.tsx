@@ -38,9 +38,9 @@ export function jobSeedPeer(job: Job): Peer {
 
 export function jobTitle(job: Job): string {
   if (job.task_type === 'embed') return 'Embeddings'
+  if (job.task_type === 'scope_rerank') return 'Scope rescore'
   if (job.task_type === 'download_model') {
-    const label = String(job.progress?.detail || job.params.model_id || 'Model download')
-    return label
+    return String(job.progress?.model_label || job.params.model_id || 'Model download')
   }
   const peer = jobSeedPeer(job)
   return (peer.title ?? '').trim() || (peer.username ? `@${peer.username}` : String(peer.external_id || 'Snowball'))
@@ -73,6 +73,10 @@ function statusClass(status: string): string {
 function jobDetail(job: Job): string {
   if (job.status === 'failed' && job.error) return job.error
   if (job.status === 'succeeded') {
+    if (job.task_type === 'download_model') {
+      const label = job.progress?.model_label
+      return typeof label === 'string' && label.trim() ? `${label} is ready` : 'Finished'
+    }
     const raw =
       job.progress?.peers_done ??
       (job.progress?.stats as { peers?: number } | undefined)?.peers

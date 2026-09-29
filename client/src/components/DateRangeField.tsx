@@ -18,7 +18,7 @@ function DatePart({
   value,
   open,
   disabled,
-  popoverZIndex = 40,
+  popoverZIndex = 90,
   onToggle,
   onClose,
   onChange,
@@ -68,7 +68,11 @@ function DatePart({
       onClose()
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        onClose()
+      }
     }
     document.addEventListener('pointerdown', onPointer)
     document.addEventListener('keydown', onKey)
@@ -118,6 +122,8 @@ function DatePart({
               style={pos}
               role="dialog"
               aria-label={`Choose ${label.toLowerCase()} date`}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
             >
               <DayPicker
                 mode="single"

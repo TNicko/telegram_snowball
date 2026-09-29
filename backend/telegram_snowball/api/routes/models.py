@@ -8,6 +8,7 @@ from psycopg.types.json import Jsonb
 
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import get_conn
+from telegram_snowball.jobs.lanes import live_conflict_detail, live_job_in_lane
 from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.models_catalog import catalog_by_id, load_selection, model_is_ready, save_selection
 from telegram_snowball.models_health import models_catalog_payload
@@ -18,7 +19,6 @@ router = APIRouter(prefix="/models")
 class SelectModelsIn(BaseModel):
     image: str | None = None
     text: str | None = None
-    caption: str | None = None
 
 
 class DownloadModelIn(BaseModel):
@@ -61,16 +61,16 @@ async def select_models(body: SelectModelsIn) -> dict[str, Any]:
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if previous["text"] != selected["text"] or previous["image"] != selected["image"]:
-        from telegram_snowball.embed.runtime import drop_cached
+        from telegram_snowball.embed.client import drop_cached_remote
         from telegram_snowball.embed.store import reset_image_embeddings, reset_text_embeddings
 
         async with get_conn(settings) as conn:
             if previous["text"] != selected["text"]:
                 await reset_text_embeddings(conn)
-                drop_cached(previous["text"])
+                await drop_cached_remote(settings, previous["text"])
             if previous["image"] != selected["image"]:
                 await reset_image_embeddings(conn)
-                drop_cached(previous["image"])
+                await drop_cached_remote(settings, previous["image"])
             await conn.commit()
     return await _attach_download(models_catalog_payload(settings))
 
@@ -94,16 +94,10 @@ async def download_model(body: DownloadModelIn) -> dict[str, Any]:
         )
 
     async with get_conn(settings) as conn:
-        running = await conn.execute(
-            "SELECT id FROM jobs WHERE status IN ('queued', 'running') LIMIT 1"
-        )
-        if await running.fetchone():
+        if await live_job_in_lane(conn, "embed"):
             raise HTTPException(
                 status_code=409,
-                detail=(
-                    "A job is already queued or running. v1 runs one worker / one job at a time. "
-                    "Wait for it to finish, then download the model."
-                ),
+                detail=f"{live_conflict_detail('embed')} Wait for it to finish, then download the model.",
             )
         inserted = await conn.execute(
             """

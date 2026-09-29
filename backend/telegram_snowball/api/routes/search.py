@@ -10,7 +10,8 @@ from telegram_snowball.api.routes.images import _attach_image_peers
 from telegram_snowball.api.routes.messages import _MESSAGE_PEER_COLUMNS, _public_message
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import get_conn
-from telegram_snowball.embed.runtime import EncoderError, load_encoder, vision_is_multimodal
+from telegram_snowball.embed.client import EmbedUnavailable, encode_texts
+from telegram_snowball.embed.runtime import EncoderError, vision_is_multimodal
 from telegram_snowball.embed.store import search_image_blobs, search_text_messages
 from telegram_snowball.models_catalog import load_selection, model_is_ready
 
@@ -43,14 +44,18 @@ async def search_messages(
             detail="The text embedding model is not ready. Download it from Home → Models.",
         )
     try:
-        encoder = load_encoder(settings, "text")
-        vector = encoder.encode_texts([query], is_query=True)[0]
+        model_id, vectors = await encode_texts(
+            settings, slot="text", texts=[query], is_query=True
+        )
+        vector = vectors[0]
     except EncoderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except EmbedUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     async with get_conn(settings) as conn:
         hits = await search_text_messages(
             conn,
-            model_id=encoder.model_id,
+            model_id=model_id,
             query=vector,
             limit=limit,
             peer_external_id=peer_external_id,
@@ -61,7 +66,7 @@ async def search_messages(
                 "total": 0,
                 "limit": limit,
                 "offset": 0,
-                "model_id": encoder.model_id,
+                "model_id": model_id,
                 "q": query,
             }
         ids = [row["message_id"] for row in hits]
@@ -91,7 +96,7 @@ async def search_messages(
         "total": len(messages),
         "limit": limit,
         "offset": 0,
-        "model_id": encoder.model_id,
+        "model_id": model_id,
         "q": query,
     }
 
@@ -122,14 +127,18 @@ async def search_images(
             ),
         )
     try:
-        encoder = load_encoder(settings, "image")
-        vector = encoder.encode_texts([query], is_query=True)[0]
+        model_id, vectors = await encode_texts(
+            settings, slot="image", texts=[query], is_query=True
+        )
+        vector = vectors[0]
     except EncoderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except EmbedUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     async with get_conn(settings) as conn:
         hits = await search_image_blobs(
             conn,
-            model_id=encoder.model_id,
+            model_id=model_id,
             query=vector,
             limit=limit,
             peer_external_id=peer_external_id,
@@ -140,7 +149,7 @@ async def search_images(
                 "total": 0,
                 "limit": limit,
                 "offset": 0,
-                "model_id": encoder.model_id,
+                "model_id": model_id,
                 "q": query,
             }
         phashes = [str(row["phash"]) for row in hits]
@@ -171,6 +180,6 @@ async def search_images(
         "total": len(images),
         "limit": limit,
         "offset": 0,
-        "model_id": encoder.model_id,
+        "model_id": model_id,
         "q": query,
     }

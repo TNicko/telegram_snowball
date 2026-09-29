@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from telegram_snowball.api.routes.dialogues import PUBLIC_PEER_COLUMNS, public_peer
 from telegram_snowball.config import load_settings
@@ -20,6 +20,7 @@ from telegram_snowball.telegram.image_files import (
     session_busy,
     telegram_io_lock,
 )
+from telegram_snowball.telegram.remote_image import is_remote_image_ref, resolve_remote_image_url
 
 router = APIRouter()
 
@@ -51,6 +52,8 @@ def _is_persisted(row: dict[str, Any], data_dir: Path) -> bool:
     rel = row.get("canonical_path")
     if not rel:
         return False
+    if is_remote_image_ref(str(rel)):
+        return True
     dest = (data_dir / str(rel)).resolve()
     root = data_dir.resolve()
     if root not in dest.parents and dest != root:
@@ -215,14 +218,30 @@ async def list_images(
     }
 
 
-@router.get("/images/{phash}/file")
-async def image_file(phash: str) -> FileResponse:
+@router.get("/images/{phash}/file", response_model=None)
+async def image_file(phash: str) -> FileResponse | RedirectResponse:
     normalized = normalize_phash_hex(phash)
     if not is_dedupable_phash(normalized):
         raise HTTPException(status_code=404, detail="Image not found")
     settings = load_settings()
     async with get_conn(settings) as conn:
         await _require_blob(conn, normalized)
+        path_row = await conn.execute(
+            "SELECT canonical_path FROM image_blobs WHERE phash = %s",
+            (normalized,),
+        )
+        stored = await path_row.fetchone()
+        canonical = str((stored or {}).get("canonical_path") or "")
+        if is_remote_image_ref(canonical):
+            try:
+                url = resolve_remote_image_url(canonical)
+            except Exception as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+            return RedirectResponse(
+                url,
+                status_code=302,
+                headers={"Cache-Control": "private, max-age=300"},
+            )
         try:
             dest = await ensure_local_image(conn, settings, normalized, allow_telegram=False)
         except ImageUnavailable:

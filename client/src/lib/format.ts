@@ -1,3 +1,17 @@
+export function modelDownloadProgressLabel(
+  progress?: Record<string, unknown> | null,
+  opts?: { compact?: boolean },
+): string {
+  const compact = Boolean(opts?.compact)
+  const percent = Number(progress?.percent)
+  const hasPercent = Number.isFinite(percent) && percent >= 0
+  if (!hasPercent) return 'Downloading weights…'
+  if (compact) return `Downloading weights · ${Math.round(percent)}%`
+  const detail = progress?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  return `Downloading weights · ${Math.round(percent)}%`
+}
+
 export function formatBytes(bytes: number | null | undefined): string | null {
   if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return null
   const units = ['B', 'KB', 'MB', 'GB', 'TB'] as const

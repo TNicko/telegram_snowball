@@ -5,7 +5,7 @@ type Props = {
   className?: string
 }
 
-/** Shimmering status text (same pattern as messenger client LoadingText). */
+/** Shimmering status text. */
 export function LoadingText({ children, className }: Props) {
   return (
     <span className={[lt.text, className].filter(Boolean).join(' ')} aria-label={children}>

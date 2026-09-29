@@ -7,11 +7,13 @@ import { isLiveJob, JobCard, JobList } from '../components/HomeJobs'
 import { LoadingText } from '../components/LoadingText'
 import { PeerAvatar } from '../components/PeerAvatar'
 import { ModelSetupModal } from '../components/ModelSetupModal'
+import { ScopeInputsCard } from '../components/ScopeInputsCard'
 import { SnowballConfigModal } from '../components/SnowballConfigModal'
 import { useDialogueSync } from '../hooks/useDialogueSync'
 import { useSnowballJobs } from '../hooks/useSnowballJobs'
 import { accountDisplayName, formatAccountPhone, syncingChatsLabel } from '../lib/account'
 import { api, type AppStatus, type Job, type ModelCatalog, type ModelSlot, type Peer } from '../lib/api'
+import { modelDownloadProgressLabel } from '../lib/format'
 import { peerTypeLabel } from '../lib/peer'
 import { useAppStatus } from '../layout/statusContext'
 import h from './HomePage.module.css'
@@ -31,6 +33,7 @@ export default function HomePage() {
   const [modelBusy, setModelBusy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [scopeCount, setScopeCount] = useState(0)
 
   const { running: dialoguesRunning, loaded: dialoguesLoaded } = useDialogueSync()
 
@@ -44,7 +47,7 @@ export default function HomePage() {
     const timer = window.setInterval(() => {
       void api.models().then(setModels).catch(() => undefined)
       void api.status().then(setStatus).catch(() => undefined)
-    }, 2000)
+    }, 1000)
     return () => window.clearInterval(timer)
   }, [models?.download])
 
@@ -54,7 +57,6 @@ export default function HomePage() {
 
   const imageReady = models?.slots.image.ready ?? status?.models.image.ready ?? false
   const textReady = models?.slots.text.ready ?? status?.models.text.ready ?? false
-  const captionReady = models?.slots.caption.ready ?? status?.models.caption.ready ?? false
 
   const applyModels = (next: ModelCatalog) => {
     setModels(next)
@@ -65,7 +67,6 @@ export default function HomePage() {
             models: {
               image: next.slots.image,
               text: next.slots.text,
-              caption: next.slots.caption,
             },
           }
         : current,
@@ -197,28 +198,26 @@ export default function HomePage() {
           <h2 className="sectionTitle">Models</h2>
           <div className="modelCards">
             <ModelCard
-              title={models?.slots.image.label ?? 'Vision'}
+              title={`Image - ${models?.slots.image.label ?? 'Vision'}`}
               ready={imageReady}
-              hint={models?.copy.image.blurb}
               downloading={models?.download?.params?.slot === 'image'}
+              progress={models?.download?.params?.slot === 'image' ? models.download.progress : null}
               onClick={() => setModelSlot('image')}
             />
             <ModelCard
-              title={models?.slots.text.label ?? 'Message text'}
+              title={`Text - ${models?.slots.text.label ?? 'Message text'}`}
               ready={textReady}
-              hint={models?.copy.text.blurb}
               downloading={models?.download?.params?.slot === 'text'}
+              progress={models?.download?.params?.slot === 'text' ? models.download.progress : null}
               onClick={() => setModelSlot('text')}
-            />
-            <ModelCard
-              title={models?.slots.caption.label ?? 'Captions'}
-              ready={captionReady}
-              hint={models?.copy.caption.blurb}
-              downloading={models?.download?.params?.slot === 'caption'}
-              onClick={() => setModelSlot('caption')}
             />
           </div>
         </section>
+        <ScopeInputsCard
+          imageReady={imageReady}
+          multimodal={Boolean(models?.slots.image.multimodal ?? status?.models.image.multimodal)}
+          onInputsChange={setScopeCount}
+        />
       </div>
 
       <section className={`${h.crawl}${jobs.length > 0 ? ` ${h.crawlFilled}` : ''}`}>
@@ -312,6 +311,7 @@ export default function HomePage() {
           busy={busy}
           imageReady={imageReady}
           textReady={textReady}
+          scopeAvailable={scopeCount > 0 && imageReady}
           title="Begin snowballing"
           startLabel="Start snowball"
           onClose={() => setModalOpen(false)}
@@ -325,22 +325,23 @@ export default function HomePage() {
 function ModelCard({
   title,
   ready,
-  hint,
   downloading,
+  progress,
   onClick,
 }: {
   title: string
   ready: boolean
-  hint?: string
   downloading?: boolean
+  progress?: Record<string, unknown> | null
   onClick: () => void
 }) {
-  const statusClass = ready
-    ? h.modelStatusReady
-    : downloading
-      ? h.modelStatusBusy
+  const statusClass = downloading
+    ? h.modelStatusBusy
+    : ready
+      ? h.modelStatusReady
       : h.modelStatusWarn
-  const status = ready ? 'Ready' : downloading ? 'Downloading' : 'Not ready'
+  const downloadLabel = modelDownloadProgressLabel(progress, { compact: true })
+  const status = downloading ? downloadLabel : ready ? 'Ready' : 'Not ready'
   return (
     <button
       type="button"
@@ -350,9 +351,15 @@ function ModelCard({
     >
       <span className={`${h.modelStatus} ${statusClass}`} aria-hidden />
       <h3>{title}</h3>
-      {downloading ? <p className="muted">Downloading weights…</p> : null}
-      {!ready && !downloading ? <p className="muted">Click to set up.</p> : null}
-      {ready && hint ? <p className="muted">{hint}</p> : null}
+      {downloading ? (
+        <p className="muted">
+          <LoadingText>{downloadLabel}</LoadingText>
+        </p>
+      ) : null}
+      {!ready && !downloading ? <p className="muted">Not ready. Click to set up.</p> : null}
+      {ready && !downloading ? (
+        <p className="muted">Currently active. Click here to change.</p>
+      ) : null}
     </button>
   )
 }

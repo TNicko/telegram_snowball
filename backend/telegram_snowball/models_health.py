@@ -35,9 +35,17 @@ def models_catalog_payload(settings: Settings) -> dict[str, Any]:
     selected = load_selection(settings)
     catalog: dict[str, list[dict[str, Any]]] = {}
     for slot in SLOTS:
+        items = list(models_for_slot(slot))
+        selected_id = selected[slot]
+        if selected_id and not any(item["id"] == selected_id for item in items):
+            try:
+                extra = catalog_by_id(selected_id)
+            except KeyError:
+                extra = None
+            if extra and extra["slot"] == slot:
+                items.insert(0, extra)
         catalog[slot] = [
-            public_spec(item, settings=settings, selected_id=selected[slot])
-            for item in models_for_slot(slot)
+            public_spec(item, settings=settings, selected_id=selected_id) for item in items
         ]
     return {
         "slots": models_health(settings),

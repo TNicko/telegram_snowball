@@ -98,9 +98,7 @@
 }
 
 .swatchScraping {
-  box-shadow:
-    0 0 0 1px rgba(125, 255, 106, 0.45),
-    0 0 8px 2px rgba(125, 255, 106, 0.55);
+  box-shadow: 0 0 0 1px rgba(125, 255, 106, 0.45);
 }
 
 .live {
