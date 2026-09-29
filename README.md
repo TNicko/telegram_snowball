@@ -36,7 +36,6 @@ Host Python and Node are **not** required.
 ## Quick start
 
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 
