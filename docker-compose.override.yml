@@ -1,4 +1,5 @@
 # Auto-loaded by `docker compose up`. Serves the UI with Vite HMR.
+# Open http://127.0.0.1:8080 on the host. Vite's "Network" URL is the container IP.
 # To use the static nginx client instead:
 #   COMPOSE_FILE=docker-compose.yml docker compose up --build
 services:
@@ -15,7 +16,7 @@ services:
       - ./client/index.html:/app/index.html
       - ./client/vite.config.ts:/app/vite.config.ts
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${SNOWBALL_HMR_CLIENT_PORT}/"]
       interval: 10s
       timeout: 5s
       retries: 12
