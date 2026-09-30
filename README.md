@@ -31,8 +31,6 @@ Crawl  -  Collect  -  Process  -  Analyse
 - [Docker](https://docs.docker.com/get-docker/) with Compose v2 (macOS, Linux, or Windows)
 - A Telegram account and a [Telegram API app](https://my.telegram.org)
 
-Host Python and Node are **not** required.
-
 ## Quick start
 
 ```bash
