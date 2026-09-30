@@ -57,20 +57,3 @@ Data that survives restart:
 - `./data` — media, embedding markers, `secret.key`
 
 Stop with Ctrl+C, or `docker compose down`. Add `-v` only if you want to wipe the database volume.
-
-## Snowball embedding
-
-Forward snowball jobs default to **embed images** and **embed text** both on. If a toggle is on, that model must be downloaded (READY + weight files under `data/models/<id>/`) or the job is rejected. Turn a toggle off to scrape without embedding.
-
-After scrape, the embed sidecar encodes:
-
-- **Message text** with the selected text model (E5 / BGE) into a message-to-message space
-- **Images on disk** (persisted or still in the image cache) with the selected vision model
-
-CLIP and SigLIP also encode **text queries in the vision space** (text-to-image). MobileNet is image-only. **Do not mix E5 vectors with SigLIP vectors** — they are different spaces.
-
-Catalog → Messages / Images has a **Meaning** search once the matching model is ready and vectors exist. Per-peer **Embed remainder** in the peer coverage modal backfills rows that were scraped before models were ready. Image embedding needs the pixels: hash-only images with no file on disk are skipped.
-
-The Home **Models** cards open a picker. Defaults are **SigLIP2 Base** (vision) and **E5 Small multilingual** (message text).
-
-Downloads go to `data/models/<id>/` via an **embed-sidecar** job. A download can run while a scrape job is in progress; it does not take the Telegram session. Switching the selected text or vision model clears stored vectors for that slot so they are not compared across models.
