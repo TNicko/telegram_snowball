@@ -74,35 +74,3 @@ Catalog → Messages / Images has a **Meaning** search once the matching model i
 The Home **Models** cards open a picker. Defaults are **SigLIP2 Base** (vision) and **E5 Small multilingual** (message text).
 
 Downloads go to `data/models/<id>/` via an **embed-sidecar** job. A download can run while a scrape job is in progress; it does not take the Telegram session. Switching the selected text or vision model clears stored vectors for that slot so they are not compared across models.
-
-## Contributor install (optional)
-
-`docker compose up` uses Vite HMR for the UI (`docker-compose.override.yml` bind-mounts `client/src`). Saving a client file should refresh in the browser.
-
-API, scrape worker, and embed sidecar still need an image rebuild after Python changes, or the host path below.
-
-To serve the static nginx client instead:
-
-```bash
-COMPOSE_FILE=docker-compose.yml docker compose up --build
-```
-
-Use a host venv only if you are changing the Python or Vite code without Docker:
-
-```bash
-docker compose up -d postgres
-cd backend && python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
-pytest
-uvicorn telegram_snowball.api.main:app --reload --host 127.0.0.1 --port 8000
-python -m telegram_snowball.worker
-python -m telegram_snowball.embed
-cd ../client && npm install && npm run dev
-```
-
-Embedding inference lives in the **embed** Compose image (CPU PyTorch). A host venv needs `pip install -e ".[embed]"` plus a CPU/GPU torch wheel if you run the sidecar outside Docker. Point `SNOWBALL_EMBED_URL` at that process (default `http://127.0.0.1:8001`).
-
-Investigators can keep using `docker compose up`.
-
-## Status
-
-Local collector and analysis workbench: scrape, catalogs, forward/shared-image graphs, pHash, and on-device text/image embeddings.
