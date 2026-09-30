@@ -128,9 +128,7 @@ _HAS_PIXELS_SQL = """
 (
   (
     NULLIF(BTRIM(b.canonical_path), '') IS NOT NULL
-    AND b.canonical_path NOT LIKE 's3://%'
-    AND b.canonical_path NOT LIKE 'http://%'
-    AND b.canonical_path NOT LIKE 'https://%'
+    AND POSITION('://' IN b.canonical_path) = 0
   )
   OR EXISTS (SELECT 1 FROM image_cache c WHERE c.phash = b.phash)
 )

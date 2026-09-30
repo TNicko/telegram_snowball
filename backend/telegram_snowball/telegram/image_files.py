@@ -15,7 +15,6 @@ from telethon.tl.types import Message
 from telegram_snowball.config import Settings
 from telegram_snowball.phash import is_dedupable_phash, normalize_phash_hex
 from telegram_snowball.telegram.profile_photos import sniff_media_bytes, sniff_profile_media, suffix_for_content_type
-from telegram_snowball.telegram.remote_image import is_remote_image_ref
 from telegram_snowball.telegram.resolve import entity_for_peer
 
 lg = logging.getLogger(__name__)
@@ -42,7 +41,8 @@ def cache_rel_path(phash: str, suffix: str) -> str:
 
 
 def resolve_under_data_dir(settings: Settings, rel: str | None) -> Path | None:
-    if not rel or is_remote_image_ref(rel):
+    raw = str(rel or "").strip()
+    if not raw or "://" in raw:
         return None
     dest = (settings.data_dir / str(rel)).resolve()
     root = settings.data_dir.resolve()
@@ -357,9 +357,6 @@ async def persist_catalog_image(
     allow_telegram: bool,
     client: TelegramClient | None = None,
 ) -> str:
-    rel = await lookup_persisted_path(conn, phash_hex)
-    if is_remote_image_ref(rel):
-        return str(rel)
     existing = await persisted_file(conn, settings, phash_hex)
     if existing is not None:
         rel = await lookup_persisted_path(conn, phash_hex)
