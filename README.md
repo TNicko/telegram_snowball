@@ -43,11 +43,11 @@ Compose services:
 
 | Service | Role |
 |---|---|
-| `postgres` | Postgres 16 + pgvector (internal only) |
-| `api` | FastAPI on the compose network (no torch) |
+| `postgres` | Postgres 16 + pgvector |
+| `api` | FastAPI on the compose network |
 | `worker` | Scrape process; claims `fetch_dialogues` / `forward_snowball`; one Telethon session |
 | `embed` | Torch sidecar; claims `download_model` / `embed`; HTTP encode for search and snowball |
-| `client` | Static UI on loopback `:8080`, proxies `/api` (including WebSocket login) |
+| `client` | Static UI on loopback `:8080`, proxies `/api` |
 
 Data that survives restart:
 
