@@ -10,7 +10,7 @@ from telethon.errors import SessionPasswordNeededError
 from telethon.sessions import StringSession
 from telethon.tl.types import User
 
-from telegram_snowball.config import load_settings
+from telegram_snowball.config import Settings, load_settings
 from telegram_snowball.crypto import decrypt_text, encrypt_text, load_fernet
 from telegram_snowball.db import get_conn
 from telegram_snowball.telegram.client import session_string_from_client
@@ -25,6 +25,36 @@ class CredentialsIn(BaseModel):
     api_hash: str = Field(..., min_length=8)
 
 
+async def _persist_credentials(
+    conn, settings: Settings, api_id: int, api_hash: str
+) -> None:
+    fernet = load_fernet(settings)
+    payload = {
+        "api_id_enc": encrypt_text(fernet, str(api_id)),
+        "api_hash_enc": encrypt_text(fernet, api_hash.strip()),
+    }
+    await conn.execute(
+        """
+        INSERT INTO app_settings (key, value, updated_at)
+        VALUES ('telegram_credentials', %s, now())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+        """,
+        (Jsonb(payload),),
+    )
+
+
+async def seed_credentials_from_env(conn, settings: Settings) -> bool:
+    pair = settings.env_telegram_api()
+    if not pair:
+        return False
+    row = await conn.execute("SELECT 1 FROM app_settings WHERE key = 'telegram_credentials'")
+    if await row.fetchone():
+        return False
+    await _persist_credentials(conn, settings, pair[0], pair[1])
+    await conn.commit()
+    return True
+
+
 async def _load_plain_credentials() -> tuple[int, str]:
     settings = load_settings()
     async with get_conn(settings) as conn:
@@ -32,32 +62,25 @@ async def _load_plain_credentials() -> tuple[int, str]:
             "SELECT value FROM app_settings WHERE key = 'telegram_credentials'"
         )
         data = await row.fetchone()
-    if not data:
-        raise HTTPException(status_code=400, detail="Save API credentials first.")
-    fernet = load_fernet(settings)
-    payload = data["value"]
-    return int(decrypt_text(fernet, payload["api_id_enc"])), decrypt_text(
-        fernet, payload["api_hash_enc"]
-    )
+        if data:
+            fernet = load_fernet(settings)
+            payload = data["value"]
+            return int(decrypt_text(fernet, payload["api_id_enc"])), decrypt_text(
+                fernet, payload["api_hash_enc"]
+            )
+        pair = settings.env_telegram_api()
+        if pair:
+            await _persist_credentials(conn, settings, pair[0], pair[1])
+            await conn.commit()
+            return pair
+    raise HTTPException(status_code=400, detail="Save API credentials first.")
 
 
 @router.put("/credentials")
 async def save_credentials(body: CredentialsIn) -> dict[str, bool]:
     settings = load_settings()
-    fernet = load_fernet(settings)
-    payload = {
-        "api_id_enc": encrypt_text(fernet, str(body.api_id)),
-        "api_hash_enc": encrypt_text(fernet, body.api_hash.strip()),
-    }
     async with get_conn(settings) as conn:
-        await conn.execute(
-            """
-            INSERT INTO app_settings (key, value, updated_at)
-            VALUES ('telegram_credentials', %s, now())
-            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-            """,
-            (Jsonb(payload),),
-        )
+        await _persist_credentials(conn, settings, body.api_id, body.api_hash)
         await conn.commit()
     return {"ok": True}
 

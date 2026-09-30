@@ -7,6 +7,7 @@ type Step = 'credentials' | 'phone' | 'code' | 'password'
 export default function SetupPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('credentials')
+  const [ready, setReady] = useState(false)
   const [apiId, setApiId] = useState('')
   const [apiHash, setApiHash] = useState('')
   const [phone, setPhone] = useState('')
@@ -20,9 +21,11 @@ export default function SetupPage() {
     api
       .status()
       .then((status) => {
+        if (status.setup_phone) setPhone(status.setup_phone)
         if (status.has_credentials && !status.has_session) setStep('phone')
       })
       .catch(() => undefined)
+      .finally(() => setReady(true))
   }, [])
 
   const saveCredentials = async () => {
@@ -87,6 +90,8 @@ export default function SetupPage() {
     setBusy(true)
     socket?.send(JSON.stringify({ password }))
   }
+
+  if (!ready) return <div className="setupWrap muted">Loading…</div>
 
   return (
     <div className="setupWrap">

@@ -69,10 +69,13 @@ async def get_status() -> dict:
             """
         )
         active_job = await job_row.fetchone()
+    env_api = settings.env_telegram_api()
+    setup_phone = settings.env_telegram_phone() if account is None else ""
     return {
-        "has_credentials": has_credentials,
+        "has_credentials": has_credentials or env_api is not None,
         "has_session": account is not None,
         "setup_complete": account is not None,
+        "setup_phone": setup_phone or None,
         "account": public_account(dict(account), data_dir=settings.data_dir) if account else None,
         "models": models_health(settings),
         "active_job": dict(active_job) if active_job else None,

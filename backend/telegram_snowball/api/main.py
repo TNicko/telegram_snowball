@@ -5,8 +5,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from telegram_snowball.config import load_settings
-from telegram_snowball.db import apply_schema, connect_with_retry
 from telegram_snowball.api.routes import (
     catalog_stats,
     dialogues,
@@ -23,6 +21,9 @@ from telegram_snowball.api.routes import (
     status,
     videos,
 )
+from telegram_snowball.api.routes.setup import seed_credentials_from_env
+from telegram_snowball.config import load_settings
+from telegram_snowball.db import apply_schema, connect_with_retry
 
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ async def lifespan(_app: FastAPI):
     conn = await connect_with_retry(settings.postgres_dsn)
     try:
         await apply_schema(conn)
+        await seed_credentials_from_env(conn, settings)
     finally:
         await conn.close()
     yield
@@ -40,8 +42,8 @@ app = FastAPI(title="Telegram Snowball", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://127.0.0.1:8081",
-        "http://localhost:8081",
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
         "http://127.0.0.1:5173",
         "http://localhost:5173",
         "http://127.0.0.1:80",

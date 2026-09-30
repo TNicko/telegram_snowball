@@ -50,6 +50,7 @@ export type AppStatus = {
   has_credentials: boolean
   has_session: boolean
   setup_complete: boolean
+  setup_phone?: string | null
   account: Account | null
   models: {
     image: ModelHealth

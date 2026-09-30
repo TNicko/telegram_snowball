@@ -22,6 +22,25 @@ class Settings(BaseSettings):
     snowball_embed_bind: str = "127.0.0.1"
     snowball_embed_port: int = 8001
     snowball_worker_kind: str = "scrape"
+    telegram_api_id: str = ""
+    telegram_api_hash: str = ""
+    telegram_phone: str = ""
+
+    def env_telegram_api(self) -> tuple[int, str] | None:
+        raw_id = self.telegram_api_id.strip()
+        raw_hash = self.telegram_api_hash.strip()
+        if not raw_id or not raw_hash:
+            return None
+        try:
+            api_id = int(raw_id)
+        except ValueError:
+            return None
+        if api_id <= 0 or len(raw_hash) < 8:
+            return None
+        return api_id, raw_hash
+
+    def env_telegram_phone(self) -> str:
+        return self.telegram_phone.strip()
 
     @property
     def data_dir(self) -> Path:
