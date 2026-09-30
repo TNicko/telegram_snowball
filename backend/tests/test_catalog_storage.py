@@ -19,6 +19,10 @@ def test_bucket_labels_zero() -> None:
     assert body["count"] == 0
     assert body["bytes"] == 0
     assert body["bytes_label"] == "0 B"
+    empty_table = _bucket(0, 65536)
+    assert empty_table["count"] == 0
+    assert empty_table["bytes"] == 0
+    assert empty_table["bytes_label"] == "0 B"
     sized = _bucket(12, 1024)
     assert sized["count"] == 12
     assert sized["bytes_label"] == "1 KB"

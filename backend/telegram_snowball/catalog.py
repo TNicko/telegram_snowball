@@ -181,8 +181,11 @@ def attach_catalog_stats(
     peer["videos_excluded"] = bool(media_row["videos_excluded"]) if media_row else False
     peer["large_excluded"] = bool(media_row["large_excluded"]) if media_row else False
     peer["max_media_bytes"] = int(media_row["max_media_bytes"]) if media_row and media_row.get("max_media_bytes") else None
-    peer["embed_text"] = bool(has_fetch and text_embedded >= text_total)
-    peer["embed_images"] = bool(image_total > 0 and image_embedded >= image_total)
+    scraped = bool(has_fetch or shown_posts > 0)
+    peer["embed_text"] = {"done": text_embedded, "total": text_total} if scraped and text_total > 0 else None
+    peer["embed_images"] = (
+        {"done": image_embedded, "total": image_total} if scraped and image_total > 0 else None
+    )
     return peer
 
 

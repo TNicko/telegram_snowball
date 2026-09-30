@@ -317,6 +317,11 @@ export type MediaBucket = {
   unique?: number
 }
 
+export type EmbedBucket = {
+  done: number
+  total: number
+}
+
 export type CoverageWindow = {
   covered_after?: string | null
   covered_before?: string | null
@@ -400,8 +405,8 @@ export type Peer = {
   videos_excluded?: boolean
   large_excluded?: boolean
   max_media_bytes?: number | null
-  embed_text?: boolean
-  embed_images?: boolean
+  embed_text?: EmbedBucket | null
+  embed_images?: EmbedBucket | null
   scope_score?: number
   forward_score?: number
 }

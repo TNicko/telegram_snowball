@@ -46,6 +46,27 @@ def test_attach_keeps_dash_until_any_posts_exist() -> None:
     )
     assert peer["posts"] is None
     assert peer["forwards_unique"] is None
+    assert peer["embed_text"] is None
+    assert peer["embed_images"] is None
+
+
+def test_attach_embed_progress_after_scrape() -> None:
+    peer = attach_catalog_stats(
+        _peer(),
+        fetch_ids={1},
+        media_cov={},
+        message_stats={
+            1: {
+                "posts": 12,
+                "text_total": 10,
+                "text_embedded": 4,
+                "image_embeddable": 6,
+                "image_embedded_unique": 2,
+            }
+        },
+    )
+    assert peer["embed_text"] == {"done": 4, "total": 10}
+    assert peer["embed_images"] == {"done": 2, "total": 6}
 
 
 def test_time_coverage_ratio_walks_back_from_now() -> None:

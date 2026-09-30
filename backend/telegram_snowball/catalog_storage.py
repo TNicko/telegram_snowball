@@ -31,10 +31,11 @@ def directory_bytes(root: Path) -> int:
 
 
 def _bucket(count: int, nbytes: int) -> dict[str, Any]:
+    total = int(count)
     return {
-        "count": int(count),
-        "bytes": int(nbytes),
-        "bytes_label": format_bytes(nbytes) or "0 B",
+        "count": total,
+        "bytes": 0 if total <= 0 else int(nbytes),
+        "bytes_label": format_bytes(0 if total <= 0 else int(nbytes)) or "0 B",
     }
 
 

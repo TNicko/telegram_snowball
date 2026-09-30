@@ -55,3 +55,13 @@ async def test_record_first_visible_message_writes() -> None:
     await record_first_visible_message(conn, 42, SimpleNamespace(id=7, date=date))
     assert len(conn.updates) == 1
     assert conn.updates[0][1] == (7, date, 42, 7)
+
+
+def test_ensure_first_visible_message_does_not_persist_catalog_rows() -> None:
+    import inspect
+
+    from telegram_snowball.telegram import first_message as module
+
+    source = inspect.getsource(module.ensure_first_visible_message)
+    assert "_persist_message" not in source
+    assert "record_first_visible_message" in source

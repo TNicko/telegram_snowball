@@ -13,7 +13,7 @@ import {
   Video,
   type LucideIcon,
 } from 'lucide-react'
-import type { MediaBucket, Peer } from '../lib/api'
+import type { EmbedBucket, MediaBucket, Peer } from '../lib/api'
 import { formatAddedAt, formatMaxMediaBytes, PEER_TYPES, peerTypeLabel } from '../lib/peer'
 import { LoadingText } from './LoadingText'
 import { PeerAvatar } from './PeerAvatar'
@@ -141,25 +141,24 @@ function MediaValue({
   )
 }
 
-function EmbedMark({ ok, label }: { ok: boolean; label: string }) {
+function EmbedValue({ bucket, label }: { bucket: EmbedBucket | null | undefined; label: string }) {
+  if (!bucket) {
+    return (
+      <span className={t.stat} title={label}>
+        <span className={t.statLabel}>{label}</span>
+        {dash()}
+      </span>
+    )
+  }
+  const complete = bucket.done >= bucket.total
+  const title = `${label}: ${bucket.done.toLocaleString()} of ${bucket.total.toLocaleString()}`
   return (
-    <span className={`${t.embedMark}${ok ? ` ${t.embedOk}` : ` ${t.embedNo}`}`} title={label}>
-      <span className={t.embedLabel}>{label}</span>
-      {ok ? (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M5 12.5 10 17.5 19 7"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        </svg>
-      )}
+    <span className={`${t.stat}${complete ? '' : ` ${t.mediaPartial}`}`} title={title}>
+      <span className={t.statLabel}>{label}</span>
+      <span className={t.mediaValue}>
+        <span>{bucket.done.toLocaleString()}</span>
+        <span className={t.mediaTotal}>/{bucket.total.toLocaleString()}</span>
+      </span>
     </span>
   )
 }
@@ -479,8 +478,8 @@ function CatalogPeerRow({ peer, onClick }: { peer: Peer; onClick?: (peer: Peer) 
           {MEDIA_ITEMS.map((item) => (
             <MediaValue key={item.key} bucket={peer.media?.[item.key]} label={item.label} icon={item.icon} />
           ))}
-          <EmbedMark ok={Boolean(peer.embed_images)} label="Embed images" />
-          <EmbedMark ok={Boolean(peer.embed_text)} label="Embed text" />
+          <EmbedValue bucket={peer.embed_images} label="Embed images" />
+          <EmbedValue bucket={peer.embed_text} label="Embed text" />
         </div>
         {exclusions.length > 0 ? (
           <div className={t.exclusions}>

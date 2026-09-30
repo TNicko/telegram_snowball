@@ -84,7 +84,7 @@ async def ensure_first_visible_message(
     entity: Any,
     peer_id: int,
 ) -> bool:
-    """Fetch Telegram's first visible message if we do not yet have its date."""
+    """Record the first visible message date on the peer. Do not catalog it."""
     if not await first_message_missing(conn, peer_id):
         return False
     try:
@@ -98,11 +98,9 @@ async def ensure_first_visible_message(
     if not isinstance(first, (Message, MessageService)):
         lg.info("first visible message skip peer %s: unexpected type %s", peer_id, type(first).__name__)
         return False
-    from telegram_snowball.jobs.fetch_dialogues import _persist_message
     from telegram_snowball.telegram.materialize import upsert_history_entities
 
     await upsert_history_entities(conn, chats=page.chats, users=page.users)
-    await _persist_message(conn, peer_id=peer_id, message=first)
     await record_first_visible_message(conn, peer_id, first)
     return True
 
@@ -112,7 +110,7 @@ async def backfill_first_visible_message(
     settings: Any,
     peer_id: int,
 ) -> bool:
-    """Fetch the first visible message when coverage is missing it and Telegram is idle."""
+    """Fetch the first visible message date when coverage is missing it and Telegram is idle."""
     if not await first_message_missing(conn, peer_id):
         return False
     busy = await conn.execute(
@@ -147,3 +145,39 @@ async def backfill_first_visible_message(
     except RuntimeError as err:
         lg.info("first visible message skip peer %s: %s", peer_id, err)
         return False
+
+
+async def purge_probe_only_messages(conn: Any) -> None:
+    """Drop catalog rows that only exist from the first-visible-date probe."""
+    await conn.execute(
+        """
+        UPDATE peers p
+        SET first_message_at = m.date,
+            updated_at = now()
+        FROM messages m
+        WHERE p.first_message_at IS NULL
+          AND p.first_message_id IS NOT NULL
+          AND m.peer_external_id = p.external_id
+          AND m.telegram_message_id = p.first_message_id
+        """
+    )
+    await conn.execute(
+        """
+        DELETE FROM messages m
+        USING peers p
+        WHERE m.peer_external_id = p.external_id
+          AND p.first_message_id IS NOT NULL
+          AND m.telegram_message_id = p.first_message_id
+          AND NOT EXISTS (
+              SELECT 1
+              FROM peer_fetch_coverage f
+              WHERE f.peer_external_id = p.external_id
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM messages other
+              WHERE other.peer_external_id = p.external_id
+                AND other.telegram_message_id IS DISTINCT FROM p.first_message_id
+          )
+        """
+    )

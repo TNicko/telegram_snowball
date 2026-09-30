@@ -132,6 +132,18 @@ def _media_bucket(peer: dict[str, Any], kind: str, field: str) -> int | None:
         return None
 
 
+def _embed_ratio(peer: dict[str, Any], key: str) -> str | None:
+    bucket = peer.get(key)
+    if not isinstance(bucket, dict):
+        return None
+    try:
+        done = int(bucket.get("done"))
+        total = int(bucket.get("total"))
+    except (TypeError, ValueError):
+        return None
+    return f"{done}/{total}"
+
+
 def flatten_peer_csv(peer: dict[str, Any]) -> dict[str, Any]:
     row = {key: peer.get(key) for key in PEER_CSV_COLUMNS}
     row["usernames"] = usernames_csv(peer.get("usernames"))
@@ -145,6 +157,8 @@ def flatten_peer_csv(peer: dict[str, Any]) -> dict[str, Any]:
     row["audio_total"] = _media_bucket(peer, "audio", "total")
     row["gif_total"] = _media_bucket(peer, "gif", "total")
     row["document_total"] = _media_bucket(peer, "document", "total")
+    row["embed_text"] = _embed_ratio(peer, "embed_text")
+    row["embed_images"] = _embed_ratio(peer, "embed_images")
     return row
 
 

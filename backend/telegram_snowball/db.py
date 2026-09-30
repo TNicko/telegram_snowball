@@ -44,6 +44,10 @@ async def apply_schema(conn: psycopg.AsyncConnection[Any]) -> None:
 
     await backfill_stored_media_kinds(conn)
     await conn.commit()
+    from telegram_snowball.telegram.first_message import purge_probe_only_messages
+
+    await purge_probe_only_messages(conn)
+    await conn.commit()
 
 
 @asynccontextmanager
