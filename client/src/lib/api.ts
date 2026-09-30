@@ -342,7 +342,7 @@ export type PeerCoverage = {
     end: string
     first_message_id?: number | null
   }
-  posts: CoverageWindow & { count: number }
+  posts: CoverageWindow & { count: number | null }
   media_pass: (CoverageWindow & {
     videos_excluded?: boolean
     large_excluded?: boolean

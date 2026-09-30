@@ -9,7 +9,7 @@ from telethon.errors import ChannelPrivateError, ChatForbiddenError, FloodWaitEr
 from telethon.tl.types import Message, MessageService
 
 from telegram_snowball.config import Settings
-from telegram_snowball.jobs.progress import update_job_progress
+from telegram_snowball.jobs.progress import raise_if_cancelled, update_job_progress
 from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.telegram.client import telegram_client
 from telegram_snowball.telegram.coverage import refresh_fetch_coverage
@@ -107,6 +107,7 @@ async def run_fetch_dialogues(
         except FloodWaitError as err:
             await _sleep_flood(err)
         async for dialog in client.iter_dialogs(ignore_migrated=True):
+            await raise_if_cancelled(conn, job_id)
             entity = dialog.entity
             seen += 1
             try:

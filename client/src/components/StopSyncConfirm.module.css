@@ -1,0 +1,21 @@
+.scrim {
+  z-index: 90;
+  padding: 1rem;
+}
+.modal {
+  width: min(26rem, calc(100vw - 2rem));
+}
+.title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+.copy {
+  margin: 0.45rem 0 1.1rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.actions {
+  display: flex;
+  gap: 0.55rem;
+}

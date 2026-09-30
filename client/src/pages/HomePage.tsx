@@ -9,6 +9,7 @@ import { PeerAvatar } from '../components/PeerAvatar'
 import { ModelSetupModal } from '../components/ModelSetupModal'
 import { ScopeInputsCard } from '../components/ScopeInputsCard'
 import { SnowballConfigModal } from '../components/SnowballConfigModal'
+import { StopSyncConfirm } from '../components/StopSyncConfirm'
 import { useDialogueSync } from '../hooks/useDialogueSync'
 import { useSnowballJobs } from '../hooks/useSnowballJobs'
 import { accountDisplayName, formatAccountPhone, syncingChatsLabel } from '../lib/account'
@@ -34,8 +35,9 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false)
   const [searching, setSearching] = useState(false)
   const [scopeCount, setScopeCount] = useState(0)
+  const [pendingSnowball, setPendingSnowball] = useState<Record<string, unknown> | null>(null)
 
-  const { running: dialoguesRunning, loaded: dialoguesLoaded } = useDialogueSync()
+  const { running: dialoguesRunning, loaded: dialoguesLoaded, stop: stopChatSync } = useDialogueSync()
 
   useEffect(() => {
     api.status().then(setStatus).catch((err: Error) => setError(err.message))
@@ -117,9 +119,18 @@ export default function HomePage() {
   }
 
   const startSnowball = async (params: Record<string, unknown>) => {
+    if (dialoguesRunning) {
+      setPendingSnowball(params)
+      return
+    }
+    await launchSnowball(params)
+  }
+
+  const launchSnowball = async (params: Record<string, unknown>) => {
     setBusy(true)
     setError(null)
     try {
+      if (dialoguesRunning) await stopChatSync()
       const job = await api.createJob('forward_snowball', params)
       setModalOpen(false)
       setHit(null)
@@ -316,6 +327,17 @@ export default function HomePage() {
           startLabel="Start snowball"
           onClose={() => setModalOpen(false)}
           onStart={(params) => void startFromHit(params)}
+        />
+      ) : null}
+      {pendingSnowball ? (
+        <StopSyncConfirm
+          busy={busy}
+          onClose={() => setPendingSnowball(null)}
+          onConfirm={() => {
+            const params = pendingSnowball
+            setPendingSnowball(null)
+            if (params) void launchSnowball(params)
+          }}
         />
       ) : null}
     </div>

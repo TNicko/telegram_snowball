@@ -1,11 +1,28 @@
+.scrim {
+  align-items: safe center;
+  justify-items: safe center;
+  overflow: auto;
+  padding: 1rem;
+}
 .modal {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: min(54rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
-  overflow: auto;
+  max-height: calc(100dvh - 2rem);
+  min-height: 0;
+  overflow: hidden;
 }
 :global(.modal).modal {
+  display: flex;
+  flex-direction: column;
   width: min(54rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  min-height: 0;
+  overflow: hidden;
+}
+.modal > :not(.layers) {
+  flex-shrink: 0;
 }
 .close {
   position: absolute;
@@ -66,14 +83,17 @@
 .layers {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: auto;
+  overscroll-behavior: contain;
   background: #101010;
 }
 .axis {
   display: grid;
-  grid-template-columns: 9rem 300px 8.5rem 3.8rem;
+  grid-template-columns: 9rem 300px 8.5rem minmax(3.8rem, 1fr);
   gap: 0.65rem 0.85rem;
   align-items: end;
   padding: 0.45rem 0.8rem 0.15rem;
@@ -89,7 +109,7 @@
 }
 .row {
   display: grid;
-  grid-template-columns: 9rem 300px 8.5rem max-content;
+  grid-template-columns: 9rem 300px 8.5rem minmax(3.8rem, 1fr);
   gap: 0.65rem 0.85rem;
   align-items: center;
   padding: 0.65rem 0.8rem;
@@ -169,6 +189,11 @@
 .partial .valueDetail {
   color: var(--muted);
 }
+.valueMuted,
+.valueMuted .value {
+  color: var(--muted);
+  font-weight: 500;
+}
 .scrapeBtns {
   display: flex;
   flex-direction: row;
@@ -176,7 +201,8 @@
   justify-content: flex-end;
   gap: 0.15rem;
   min-width: 3.8rem;
-  justify-self: end;
+  width: 100%;
+  justify-self: stretch;
 }
 .scrapeBtn {
   display: inline-flex;
@@ -205,8 +231,9 @@
   border-width: 1.5px;
 }
 .scrapeSlot {
-  width: 3.8rem;
-  justify-self: end;
+  min-width: 3.8rem;
+  width: 100%;
+  justify-self: stretch;
 }
 .notes {
   margin: 0.7rem 0 0;

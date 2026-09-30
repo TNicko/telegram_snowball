@@ -72,6 +72,13 @@ function tick(generation: number) {
 
 let refreshInFlight = false
 
+async function stopDialogues() {
+  const job = snapshot.job
+  if (!isDialogueJob(job) || !isLiveJob(job)) return
+  const stopped = await api.cancelJob(job.id)
+  emit({ job: { ...stopped, status: 'cancelled' } })
+}
+
 async function refreshDialogues() {
   const running = isDialogueJob(snapshot.job) && isLiveJob(snapshot.job)
   if (refreshInFlight || running) return
@@ -139,5 +146,5 @@ export function useDialogueSync() {
 
   const running = isDialogueJob(snapshot.job) && isLiveJob(snapshot.job)
   const loaded = Number(snapshot.job?.progress?.dialogues_materialized ?? snapshot.peers.length)
-  return { ...snapshot, running, loaded, refresh: refreshDialogues }
+  return { ...snapshot, running, loaded, refresh: refreshDialogues, stop: stopDialogues }
 }

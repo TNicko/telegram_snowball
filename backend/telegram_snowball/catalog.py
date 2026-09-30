@@ -365,7 +365,7 @@ def build_peer_coverage(
         },
         "posts": {
             **(_window(fetch) or {"covered_after": None, "covered_before": None, "updated_at": None}),
-            "count": int(peer.get("posts") or 0),
+            "count": peer.get("posts"),
             "fill": posts_fill,
         },
         "media_pass": _window(

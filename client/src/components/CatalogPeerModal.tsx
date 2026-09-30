@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Download, Pickaxe, X } from 'lucide-react'
 import { LoadingText } from './LoadingText'
 import { PeerAvatar } from './PeerAvatar'
+import { StopSyncConfirm } from './StopSyncConfirm'
 import { useDialogueSync } from '../hooks/useDialogueSync'
 import { useSnowballJobs } from '../hooks/useSnowballJobs'
 import {
   api,
   type CoverageLayer,
   type CoverageWindow,
+  type EmbedBucket,
   type MediaBucket,
   type Peer,
   type PeerCoverage,
@@ -53,9 +55,33 @@ function formatCount(value: number): string {
   return value.toLocaleString()
 }
 
+const DASH = '—'
+
+function isDash(value: string): boolean {
+  return value === DASH
+}
+
 function bucketText(bucket: MediaBucket | null | undefined): string {
-  if (!bucket) return '—'
+  if (!bucket) return DASH
   return `${formatCount(bucket.downloaded)} / ${formatCount(bucket.total)}`
+}
+
+function embedText(bucket: EmbedBucket | null | undefined): string {
+  if (!bucket || typeof bucket.done !== 'number' || typeof bucket.total !== 'number' || bucket.total <= 0) {
+    return DASH
+  }
+  return `${formatCount(bucket.done)} / ${formatCount(bucket.total)}`
+}
+
+function embedRemaining(bucket: EmbedBucket | null | undefined): number {
+  if (!bucket || typeof bucket.done !== 'number' || typeof bucket.total !== 'number') return 0
+  return Math.max(0, bucket.total - bucket.done)
+}
+
+function postsValue(posts: (CoverageWindow & { count: number | null }) | null | undefined): string {
+  if (posts?.count == null) return DASH
+  if (posts.count === 0 && !posts.covered_after && !posts.covered_before) return DASH
+  return formatCount(posts.count)
 }
 
 function forwardsDetail(peer: Peer): string | null {
@@ -84,7 +110,7 @@ function remainingHashed(bucket: MediaBucket | null | undefined): number {
 }
 
 function imageBucketText(bucket: MediaBucket | null | undefined): string {
-  if (!bucket) return '—'
+  if (!bucket) return DASH
   return `${formatCount(hashedOf(bucket))} / ${formatCount(bucket.total)}`
 }
 
@@ -95,14 +121,14 @@ function downloadedText(bucket: MediaBucket | null | undefined): string | null {
 
 export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () => void }) {
   const { setJobs, jobs } = useSnowballJobs()
-  const { running: dialoguesRunning } = useDialogueSync()
+  const { running: dialoguesRunning, stop: stopChatSync } = useDialogueSync()
   const models = useAppStatus()?.models
   const [coverage, setCoverage] = useState<PeerCoverage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyLayer, setBusyLayer] = useState<RemainderLayer | null>(null)
+  const [pendingLayer, setPendingLayer] = useState<RemainderLayer | null>(null)
 
-  const jobBusy =
-    dialoguesRunning || jobs.some((job) => job.status === 'queued' || job.status === 'running')
+  const scrapeLaneBusy = jobs.some((job) => job.status === 'queued' || job.status === 'running')
   const shown = coverage?.peer ?? peer
   const handle = shown.username ? `@${shown.username}` : null
 
@@ -131,22 +157,29 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      if (pendingLayer) {
+        setPendingLayer(null)
+        return
       }
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, pendingLayer])
 
   const scrape = async (layer: RemainderLayer) => {
-    if (jobBusy || busyLayer) return
+    const embedding = layer === 'embed_text' || layer === 'embed_images'
+    if (busyLayer || (!embedding && scrapeLaneBusy)) return
     setBusyLayer(layer)
     setError(null)
     try {
+      if (!embedding && dialoguesRunning) {
+        await stopChatSync()
+      }
       const job =
-        layer === 'embed_text' || layer === 'embed_images'
+        embedding
           ? await api.createJob('embed', remainderParams(peer.external_id, layer))
           : await api.createJob('forward_snowball', remainderParams(peer.external_id, layer))
       setJobs((current) => [job, ...current.filter((item) => item.id !== job.id)])
@@ -157,12 +190,23 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
     }
   }
 
+  const requestScrape = (layer: RemainderLayer) => {
+    const embedding = layer === 'embed_text' || layer === 'embed_images'
+    if (busyLayer || (!embedding && scrapeLaneBusy)) return
+    if (!embedding && dialoguesRunning) {
+      setPendingLayer(layer)
+      return
+    }
+    void scrape(layer)
+  }
+
   const posts = coverage?.posts
   const timelineStart = coverage?.timeline.start
   const timelineEnd = coverage?.timeline.end
   const timelineWindow = formatCoverageWindow(timelineStart, timelineEnd)
   const media = shown.media
-  const scrapeDisabled = jobBusy || busyLayer != null
+  const scrapeDisabled = scrapeLaneBusy || busyLayer != null
+  const embedDisabled = busyLayer != null
   const imageBucket = media?.image
   const imageHashRemaining = remainingHashed(imageBucket)
   const videoRemaining = remainingOf(media?.video)
@@ -177,7 +221,8 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
   }
 
   return (
-    <div className="modalScrim" onClick={onClose}>
+    <>
+    <div className={`modalScrim ${s.scrim}`} onClick={onClose}>
       <div
         className={`modal ${s.modal}`}
         role="dialog"
@@ -229,16 +274,15 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
             </div>
             <CoverageRow
               label="Posts"
-              value={posts ? formatCount(posts.count) : '—'}
+              value={postsValue(posts)}
               origin={timelineStart}
               until={timelineEnd}
               layer={posts}
               detail={forwardsDetail(shown)}
-              remaining={posts && posts.count === 0 ? 1 : 0}
               disabled={scrapeDisabled}
               busy={busyLayer === 'posts'}
               actionLabel="Scrape remainder"
-              onScrape={() => void scrape('posts')}
+              onScrape={() => void requestScrape('posts')}
             />
             <CoverageRow
               label="Images"
@@ -251,18 +295,18 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
               disabled={scrapeDisabled}
               actions={[
                 {
-                  key: 'image_phash',
-                  label: 'Hash remainder',
-                  icon: 'scrape',
-                  busy: busyLayer === 'image_phash',
-                  onClick: () => void scrape('image_phash'),
-                },
-                {
                   key: 'image_download',
                   label: 'Download',
                   icon: 'download',
                   busy: busyLayer === 'image_download',
-                  onClick: () => void scrape('image_download'),
+                  onClick: () => void requestScrape('image_download'),
+                },
+                {
+                  key: 'image_phash',
+                  label: 'Hash remainder',
+                  icon: 'scrape',
+                  busy: busyLayer === 'image_phash',
+                  onClick: () => void requestScrape('image_phash'),
                 },
               ]}
             />
@@ -276,7 +320,7 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
               note={shown.videos_excluded ? 'Excluded on last pass' : null}
               disabled={scrapeDisabled}
               busy={busyLayer === 'video'}
-              onScrape={() => void scrape('video')}
+              onScrape={() => void requestScrape('video')}
             />
             <CoverageRow
               label="Audio"
@@ -287,7 +331,7 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
               remaining={audioRemaining}
               disabled={scrapeDisabled}
               busy={busyLayer === 'audio'}
-              onScrape={() => void scrape('audio')}
+              onScrape={() => void requestScrape('audio')}
             />
             <CoverageRow
               label="Gif"
@@ -298,7 +342,7 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
               remaining={gifRemaining}
               disabled={scrapeDisabled}
               busy={busyLayer === 'gif'}
-              onScrape={() => void scrape('gif')}
+              onScrape={() => void requestScrape('gif')}
             />
             <CoverageRow
               label="Files"
@@ -309,47 +353,31 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
               remaining={documentRemaining}
               disabled={scrapeDisabled}
               busy={busyLayer === 'document'}
-              onScrape={() => void scrape('document')}
+              onScrape={() => void requestScrape('document')}
             />
             <CoverageRow
               label="Text embeddings"
-              value={
-                coverage
-                  ? `${formatCount(coverage.embeds.text.done)} / ${formatCount(coverage.embeds.text.total)}`
-                  : '—'
-              }
+              value={embedText(shown.embed_text)}
               origin={timelineStart}
               until={timelineEnd}
               layer={coverage?.embeds.text}
-              remaining={
-                coverage
-                  ? Math.max(0, coverage.embeds.text.total - coverage.embeds.text.done)
-                  : 0
-              }
-              disabled={scrapeDisabled || !models?.text.ready}
+              remaining={embedRemaining(shown.embed_text)}
+              disabled={embedDisabled || !models?.text.ready}
               busy={busyLayer === 'embed_text'}
               actionLabel="Embed remainder"
-              onScrape={() => void scrape('embed_text')}
+              onScrape={() => void requestScrape('embed_text')}
             />
             <CoverageRow
               label="Image embeddings"
-              value={
-                coverage
-                  ? `${formatCount(coverage.embeds.images.done)} / ${formatCount(coverage.embeds.images.total)}`
-                  : '—'
-              }
+              value={embedText(shown.embed_images)}
               origin={timelineStart}
               until={timelineEnd}
               layer={coverage?.embeds.images}
-              remaining={
-                coverage
-                  ? Math.max(0, coverage.embeds.images.total - coverage.embeds.images.done)
-                  : 0
-              }
-              disabled={scrapeDisabled || !models?.image.ready}
+              remaining={embedRemaining(shown.embed_images)}
+              disabled={embedDisabled || !models?.image.ready}
               busy={busyLayer === 'embed_images'}
               actionLabel="Embed remainder"
-              onScrape={() => void scrape('embed_images')}
+              onScrape={() => void requestScrape('embed_images')}
             />
           </div>
         )}
@@ -364,7 +392,7 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
             type="button"
             className="btn btnPrimary"
             disabled={scrapeDisabled}
-            onClick={() => void scrape('all')}
+            onClick={() => void requestScrape('all')}
           >
             {busyLayer === 'all' ? (
               <span className="btnBusy">
@@ -381,6 +409,18 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
         </div>
       </div>
     </div>
+    {pendingLayer ? (
+      <StopSyncConfirm
+        busy={busyLayer != null}
+        onClose={() => setPendingLayer(null)}
+        onConfirm={() => {
+          const layer = pendingLayer
+          setPendingLayer(null)
+          if (layer) void scrape(layer)
+        }}
+      />
+    ) : null}
+    </>
   )
 }
 
@@ -424,6 +464,8 @@ function CoverageRow({
   )
   const pct = Math.round(segment.width)
   const windowLabel = formatCoverageWindow(layer?.covered_after, layer?.covered_before)
+  const muted = isDash(value)
+  const incomplete = !muted && Boolean(remaining && remaining > 0)
   return (
     <div className={s.row}>
       <div className={s.rowMain}>
@@ -451,7 +493,7 @@ function CoverageRow({
           />
         ) : null}
       </span>
-      <span className={`${s.valueStack}${remaining && remaining > 0 ? ` ${s.partial}` : ''}`}>
+      <span className={`${s.valueStack}${incomplete ? ` ${s.partial}` : ''}${muted ? ` ${s.valueMuted}` : ''}`}>
         <span className={s.value}>{value}</span>
         {valueDetail ? <span className={s.valueDetail}>{valueDetail}</span> : null}
       </span>

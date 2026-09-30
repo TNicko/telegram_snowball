@@ -10,6 +10,8 @@ import { isLiveJob, jobCurrentPeerId } from '../components/HomeJobs'
 import { LoadingText } from '../components/LoadingText'
 import { PeerAvatar } from '../components/PeerAvatar'
 import { SnowballConfigModal } from '../components/SnowballConfigModal'
+import { StopSyncConfirm } from '../components/StopSyncConfirm'
+import { useDialogueSync } from '../hooks/useDialogueSync'
 import { useForwardGraph } from '../hooks/useForwardGraph'
 import { useSnowballJobs } from '../hooks/useSnowballJobs'
 import { useAppStatus } from '../layout/statusContext'
@@ -83,6 +85,7 @@ function LegendItem({
 export default function GraphPage({ active = true }: { active?: boolean }) {
   const status = useAppStatus()
   const { jobs, setJobs } = useSnowballJobs()
+  const { running: dialoguesRunning, stop: stopChatSync } = useDialogueSync()
   const live = jobs.some((job) => isLiveJob(job.status))
   const liveJob = jobs.find((job) => isLiveJob(job.status)) ?? null
   const [view, setView] = useState<GraphViewConfig>(() => loadStoredGraphView())
@@ -97,6 +100,7 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pausedJob, setPausedJob] = useState<Job | null>(null)
+  const [pendingSnowball, setPendingSnowball] = useState<Record<string, unknown> | null>(null)
   const graphRef = useRef<CosmosGraphHandle | null>(null)
 
   const currentScrapeId = liveJob ? jobCurrentPeerId(liveJob) : null
@@ -358,9 +362,18 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
   }
 
   const startJob = async (params: Record<string, unknown>) => {
+    if (dialoguesRunning) {
+      setPendingSnowball(params)
+      return
+    }
+    await launchJob(params)
+  }
+
+  const launchJob = async (params: Record<string, unknown>) => {
     setBusy(true)
     setActionError(null)
     try {
+      if (dialoguesRunning) await stopChatSync()
       const job = await api.createJob('forward_snowball', params)
       setPausedJob(null)
       setModalOpen(false)
@@ -746,6 +759,17 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
             </div>
           </div>
         </div>
+      ) : null}
+      {pendingSnowball ? (
+        <StopSyncConfirm
+          busy={busy}
+          onClose={() => setPendingSnowball(null)}
+          onConfirm={() => {
+            const params = pendingSnowball
+            setPendingSnowball(null)
+            if (params) void launchJob(params)
+          }}
+        />
       ) : null}
     </div>
   )

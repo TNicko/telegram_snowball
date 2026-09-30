@@ -135,11 +135,13 @@ def test_build_peer_coverage_windows() -> None:
 
 def test_build_peer_coverage_without_windows() -> None:
     body = build_peer_coverage(_peer(), fetch=None, media=None, stats=None)
-    assert body["posts"]["count"] == 0
+    assert body["posts"]["count"] is None
     assert body["posts"]["covered_after"] is None
     assert body["posts"]["fill"] == 0.0
     assert body["timeline"]["start"] is None
     assert body["media_pass"] is None
+    assert body["peer"]["embed_text"] is None
+    assert body["peer"]["embed_images"] is None
     assert body["embeds"]["text"] == {
         "total": 0,
         "done": 0,
@@ -147,6 +149,21 @@ def test_build_peer_coverage_without_windows() -> None:
         "covered_before": None,
         "fill": 0.0,
     }
+
+
+def test_build_peer_coverage_empty_scrape_shows_zero_posts() -> None:
+    body = build_peer_coverage(
+        _peer(),
+        fetch={
+            "covered_after": "2026-09-25T12:00:00+00:00",
+            "covered_before": "2026-09-25T12:00:00+00:00",
+        },
+        media=None,
+        stats={"posts": 0},
+    )
+    assert body["posts"]["count"] == 0
+    assert body["peer"]["embed_text"] is None
+    assert body["peer"]["embed_images"] is None
 
 
 def test_build_peer_coverage_uses_first_message_origin() -> None:
