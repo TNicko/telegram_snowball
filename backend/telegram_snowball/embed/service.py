@@ -2,19 +2,28 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from telegram_snowball.accesslog import quiet_health_access_logs
 from telegram_snowball.config import load_settings
 from telegram_snowball.db import get_conn
 from telegram_snowball.embed.runtime import EncoderError, drop_cached, load_encoder
 from telegram_snowball.embed.worklock import inference_lock
 from telegram_snowball.jobs.progress import JobCancelled
 
-app = FastAPI(title="Telegram Snowball embed")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    quiet_health_access_logs()
+    yield
+
+
+app = FastAPI(title="Telegram Snowball embed", lifespan=lifespan)
 
 
 class EncodeTextIn(BaseModel):

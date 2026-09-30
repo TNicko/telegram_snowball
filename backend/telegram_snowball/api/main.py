@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from telegram_snowball.accesslog import quiet_health_access_logs
 from telegram_snowball.api.routes import (
     catalog_stats,
     dialogues,
@@ -28,6 +29,7 @@ from telegram_snowball.db import apply_schema, connect_with_retry
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    quiet_health_access_logs()
     settings = load_settings()
     conn = await connect_with_retry(settings.postgres_dsn)
     try:
@@ -35,6 +37,7 @@ async def lifespan(_app: FastAPI):
         await seed_credentials_from_env(conn, settings)
     finally:
         await conn.close()
+    print(f"Open the UI at http://127.0.0.1:{settings.snowball_http_port}", flush=True)
     yield
 
 

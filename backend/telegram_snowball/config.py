@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     snowball_embed_bind: str = "127.0.0.1"
     snowball_embed_port: int = 8001
     snowball_worker_kind: str = "scrape"
+    snowball_http_port: int = 8080
     telegram_api_id: str = ""
     telegram_api_hash: str = ""
     telegram_phone: str = ""

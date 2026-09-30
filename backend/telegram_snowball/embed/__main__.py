@@ -6,6 +6,7 @@ from contextlib import suppress
 
 import uvicorn
 
+from telegram_snowball.accesslog import quiet_health_access_logs
 from telegram_snowball.config import load_settings
 from telegram_snowball.embed.service import app
 from telegram_snowball.worker.loop import run_worker
@@ -17,6 +18,7 @@ async def _run() -> None:
         level=settings.log_level.upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    quiet_health_access_logs()
     config = uvicorn.Config(
         app,
         host=settings.snowball_embed_bind,
