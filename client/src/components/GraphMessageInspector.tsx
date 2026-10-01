@@ -153,7 +153,9 @@ function MessageMedia({ media, eager = false }: { media: MessageMediaPreview; ea
   if (media.kind === 'audio') {
     return <MediaPlaceholder icon="audio" sizeLabel={sizeLabel} detail={formatDuration(media.duration)} />
   }
-  return <MediaPlaceholder icon="document" sizeLabel={sizeLabel} detail={media.mime_type || media.file_name} />
+  return (
+    <MediaPlaceholder icon="document" sizeLabel={sizeLabel} detail={media.mime_type || media.file_name || null} />
+  )
 }
 
 export function GraphImageInspector({

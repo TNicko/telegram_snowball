@@ -26,11 +26,11 @@ function emit(patch: Partial<Snapshot>) {
   for (const listener of listeners) listener()
 }
 
-function isLiveJob(job: Job | null | undefined): boolean {
+function isLiveJob(job: Job | null | undefined): job is Job {
   return job != null && (job.status === 'queued' || job.status === 'running')
 }
 
-function isDialogueJob(job: Job | null | undefined): boolean {
+function isDialogueJob(job: Job | null | undefined): job is Job {
   return job?.task_type === 'fetch_dialogues'
 }
 
