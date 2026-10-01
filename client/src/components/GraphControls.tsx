@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Layers, Maximize2, RotateCcw, Settings2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Layers, Maximize2, Plus, RotateCcw, Settings2 } from 'lucide-react'
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { DateRangeField } from './DateRangeField'
@@ -27,6 +27,8 @@ type Props = {
   onChange: (view: GraphViewConfig) => void
   onFitView: () => void
   onRestartLayout: () => void
+  pendingNewNodes?: number
+  onLoadNewNodes?: () => void
 }
 
 function SliderRow({
@@ -142,7 +144,14 @@ function patchQuery(view: GraphViewConfig, patch: Partial<GraphQueryConfig>): Gr
   return { ...view, query: cloneGraphQuery({ ...(view.query ?? DEFAULT_GRAPH_QUERY), ...patch }) }
 }
 
-export function GraphControls({ view, onChange, onFitView, onRestartLayout }: Props) {
+export function GraphControls({
+  view,
+  onChange,
+  onFitView,
+  onRestartLayout,
+  pendingNewNodes = 0,
+  onLoadNewNodes,
+}: Props) {
   const [layersOpen, setLayersOpen] = useState(true)
   const [physicsOpen, setPhysicsOpen] = useState(false)
   const [nodesOpen, setNodesOpen] = useState(false)
@@ -162,6 +171,17 @@ export function GraphControls({ view, onChange, onFitView, onRestartLayout }: Pr
   return (
     <aside className={s.panel}>
       <div className={s.toolbar}>
+        {pendingNewNodes > 0 ? (
+          <button
+            type="button"
+            className={`${s.iconBtn} ${s.iconBtnHighlight}`}
+            onClick={onLoadNewNodes}
+            title="Add the new nodes to the graph"
+          >
+            <Plus size={14} strokeWidth={2} aria-hidden />
+            {pendingNewNodes === 1 ? '1 new node' : `${pendingNewNodes} new nodes`}
+          </button>
+        ) : null}
         <button type="button" className={s.iconBtn} onClick={onFitView} title="Fit to view">
           <Maximize2 size={14} strokeWidth={2} aria-hidden />
           Fit
@@ -375,72 +395,63 @@ export function GraphControls({ view, onChange, onFitView, onRestartLayout }: Pr
         <div className={s.body}>
           <p className={s.section}>Forces</p>
           <SliderRow
-            label="Repulsion"
-            hint="How strongly nodes push apart"
-            value={c.simulationRepulsion}
-            min={0.1}
-            max={20}
-            step={0.1}
-            format={(v) => v.toFixed(1)}
-            onChange={(simulationRepulsion) => onChange(patchCosmos(view, { simulationRepulsion }))}
-          />
-          <SliderRow
-            label="Link spring"
-            hint="How tightly connected nodes pull together"
-            value={c.simulationLinkSpring}
-            min={0.001}
-            max={0.4}
-            step={0.001}
-            format={(v) => v.toFixed(3)}
-            onChange={(simulationLinkSpring) => onChange(patchCosmos(view, { simulationLinkSpring }))}
-          />
-          <SliderRow
-            label="Link distance"
-            hint="Preferred edge length"
-            value={c.simulationLinkDistance}
-            min={20}
-            max={400}
-            step={1}
-            onChange={(simulationLinkDistance) => onChange(patchCosmos(view, { simulationLinkDistance }))}
-          />
-          <SliderRow
             label="Gravity"
             hint="Pull toward the centre of the world"
-            value={c.simulationGravity}
+            value={c.simulationGravity ?? 0.25}
             min={0}
-            max={1}
+            max={0.5}
             step={0.01}
             format={(v) => v.toFixed(2)}
             onChange={(simulationGravity) => onChange(patchCosmos(view, { simulationGravity }))}
           />
           <SliderRow
-            label="Center force"
-            hint="Extra pull toward the world centre"
-            value={c.simulationCenter}
+            label="Repulsion"
+            hint="How strongly nodes push apart"
+            value={c.simulationRepulsion ?? 0.5}
             min={0}
-            max={1}
+            max={2}
             step={0.01}
             format={(v) => v.toFixed(2)}
-            onChange={(simulationCenter) => onChange(patchCosmos(view, { simulationCenter }))}
+            onChange={(simulationRepulsion) => onChange(patchCosmos(view, { simulationRepulsion }))}
+          />
+          <SliderRow
+            label="Link strength"
+            hint="How tightly connected nodes pull together"
+            value={c.simulationLinkSpring ?? 0}
+            min={0}
+            max={2}
+            step={0.01}
+            format={(v) => v.toFixed(2)}
+            onChange={(simulationLinkSpring) => onChange(patchCosmos(view, { simulationLinkSpring }))}
+          />
+          <SliderRow
+            label="Link distance"
+            hint="Preferred edge length. The example stops at 20; this goes higher so larger nodes do not overlap."
+            value={c.simulationLinkDistance ?? 120}
+            min={1}
+            max={200}
+            step={1}
+            onChange={(simulationLinkDistance) => onChange(patchCosmos(view, { simulationLinkDistance }))}
           />
           <SliderRow
             label="Friction"
-            hint="Cosmos damping: higher keeps moving longer"
-            value={c.simulationFriction}
-            min={0.05}
-            max={0.95}
+            hint="Damping. Higher keeps nodes moving longer."
+            value={c.simulationFriction ?? 0.5}
+            min={0}
+            max={1}
             step={0.01}
             format={(v) => v.toFixed(2)}
             onChange={(simulationFriction) => onChange(patchCosmos(view, { simulationFriction }))}
           />
           <SliderRow
-            label="Cooling"
-            hint="How long the simulation runs before it freezes"
-            value={c.simulationDecay}
-            min={500}
-            max={15000}
-            step={100}
-            onChange={(simulationDecay) => onChange(patchCosmos(view, { simulationDecay }))}
+            label="Cluster strength"
+            hint="Pulls scraped, unscraped, and message nodes toward others of the same kind"
+            value={c.simulationCluster ?? 0.05}
+            min={0}
+            max={1}
+            step={0.01}
+            format={(v) => v.toFixed(2)}
+            onChange={(simulationCluster) => onChange(patchCosmos(view, { simulationCluster }))}
           />
 
           <p className={s.section}>Size</p>
@@ -497,7 +508,7 @@ export function GraphControls({ view, onChange, onFitView, onRestartLayout }: Pr
           <p className={s.section}>Links & labels</p>
           <SliderRow
             label="Link width"
-            value={c.linkWidthScale}
+            value={c.linkWidthScale ?? 1}
             min={0.2}
             max={6}
             step={0.1}
@@ -506,7 +517,7 @@ export function GraphControls({ view, onChange, onFitView, onRestartLayout }: Pr
           />
           <SliderRow
             label="Link opacity"
-            value={c.linkOpacity}
+            value={c.linkOpacity ?? 1}
             min={0.08}
             max={1}
             step={0.01}

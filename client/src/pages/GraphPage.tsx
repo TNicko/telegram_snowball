@@ -15,7 +15,7 @@ import { useDialogueSync } from '../hooks/useDialogueSync'
 import { useForwardGraph } from '../hooks/useForwardGraph'
 import { useSnowballJobs } from '../hooks/useSnowballJobs'
 import { useAppStatus } from '../layout/statusContext'
-import { api, type ForwardGraphNode, type Job } from '../lib/api'
+import { api, type ForwardGraphNode, type ForwardGraphResponse, type Job } from '../lib/api'
 import {
   DEFAULT_GRAPH_QUERY,
   GRAPH_CONFIG,
@@ -24,14 +24,12 @@ import {
   cloneGraphLayers,
   cloneGraphQuery,
   cloneGraphView,
-  applyLinkVisibilityDefaults,
-  LINK_STYLE_REVISION,
   loadStoredGraphView,
   persistGraphView,
   type GraphViewConfig,
   type MediaFilterKey,
 } from '../lib/graphConfig'
-import { endOfDayIso, isoToDate, startOfDayIso } from '../lib/graphQuery'
+import { endOfDayIso, isoToDate, mediaQueryParam, startOfDayIso } from '../lib/graphQuery'
 import { filterGraph, isImageNode, isMessageNode, isPeerNode, mediaFilterKey } from '../lib/graphLayers'
 import { graphPeerAsPeer, peerTypeLabel } from '../lib/peer'
 import s from './GraphPage.module.css'
@@ -54,6 +52,15 @@ function formatPeerList(peers: ForwardGraphNode[]): string {
   const names = peers.map((peer) => graphNodeName(peer))
   if (names.length <= 3) return names.join(', ')
   return `${names.slice(0, 3).join(', ')} +${names.length - 3}`
+}
+
+function countNewNodeIds(current: ForwardGraphResponse, next: ForwardGraphResponse): number {
+  const have = new Set(current.nodes.map((node) => node.id))
+  let count = 0
+  for (const node of next.nodes) {
+    if (!have.has(node.id)) count += 1
+  }
+  return count
 }
 
 function jobTouchesPeer(job: Job, peerId: number): boolean {
@@ -147,13 +154,50 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
     layers: view.layers,
   })
 
+  // The poll keeps fetching. The canvas stays on the last snapshot until the user
+  // loads new nodes, or until they change the query (dates, peer, messages, images).
+  const graphQueryKey = [
+    includeMessages ? 1 : 0,
+    includeSharedImages ? 1 : 0,
+    scopePeerId ?? '',
+    dateFrom ?? '',
+    dateTo ?? '',
+    mediaQueryParam(view.layers.mediaFilter) ?? '',
+  ].join('|')
+  const [graphSnapshot, setGraphSnapshot] = useState<ForwardGraphResponse | null>(null)
+  const snapshotQueryRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!data) return
+    if (graphSnapshot == null) {
+      snapshotQueryRef.current = graphQueryKey
+      setGraphSnapshot(data)
+      return
+    }
+    if (snapshotQueryRef.current !== graphQueryKey) {
+      if (data === graphSnapshot) return
+      snapshotQueryRef.current = graphQueryKey
+      setGraphSnapshot(data)
+      return
+    }
+    if (data === graphSnapshot) return
+    if (countNewNodeIds(graphSnapshot, data) === 0) setGraphSnapshot(data)
+  }, [data, graphQueryKey, graphSnapshot])
+  const displayedGraph = graphSnapshot ?? data
+  const pendingNewNodes = useMemo(() => {
+    if (!data || !graphSnapshot) return 0
+    if (snapshotQueryRef.current !== graphQueryKey) return 0
+    if (data === graphSnapshot) return 0
+    return countNewNodeIds(graphSnapshot, data)
+  }, [data, graphSnapshot, graphQueryKey])
+  const loadNewNodes = () => {
+    if (!data) return
+    snapshotQueryRef.current = graphQueryKey
+    setGraphSnapshot(data)
+  }
+
   useEffect(() => {
     persistGraphView(view)
   }, [view])
-
-  useEffect(() => {
-    setView((current) => applyLinkVisibilityDefaults(current))
-  }, [LINK_STYLE_REVISION])
 
   useEffect(() => {
     if (!wantedMessages || wantedShared) {
@@ -244,8 +288,8 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
     }
   }, [])
 
-  const sourceNodes = data?.nodes ?? []
-  const sourceEdges = data?.edges ?? []
+  const sourceNodes = displayedGraph?.nodes ?? []
+  const sourceEdges = displayedGraph?.edges ?? []
   const sourceWithScrape = useMemo(() => {
     if (currentScrapeId == null) return sourceNodes
     return sourceNodes.map((node) => {
@@ -554,6 +598,8 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
       <GraphControls
         view={view}
         onChange={commitView}
+        pendingNewNodes={pendingNewNodes}
+        onLoadNewNodes={loadNewNodes}
         onFitView={() => graphRef.current?.fitView()}
         onRestartLayout={() => {
           graphRef.current?.clearSelection()

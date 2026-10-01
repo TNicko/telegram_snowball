@@ -2,50 +2,32 @@
   position: absolute;
   inset: 0;
   min-height: 0;
-  background: transparent;
 }
 
-.canvas {
+.graph {
   width: 100%;
   height: 100%;
 }
 
-.labels {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 1;
+/* Colours come from GRAPH_CONFIG.colors via --graph-* on .wrap */
+
+.hoveredLabel {
+  background-color: color-mix(in srgb, var(--graph-scraped) 28%, #0a0a0a);
+  color: var(--graph-scraped);
 }
 
-.label {
-  position: absolute;
-  left: 0;
-  top: 0;
-  max-width: 11rem;
-  padding: 0.05rem 0.28rem;
-  border-radius: 0.25rem;
-  background: rgba(10, 10, 10, 0.72);
-  color: rgba(230, 234, 245, 0.88);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transform: translate(-50%, 6px);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
-  will-change: transform, opacity;
-  pointer-events: none;
+.scraped {
+  color: var(--graph-scraped);
 }
 
-.labelScraped {
-  color: #e8f3ff;
-  background: color-mix(in srgb, var(--graph-scraped-color, #75beff) 22%, transparent);
+.unscraped {
+  color: color-mix(in srgb, var(--graph-unscraped) 55%, white);
 }
 
-.labelScraping {
-  color: #efffef;
-  background: color-mix(in srgb, var(--graph-scraping-color, #7dff6a) 22%, transparent);
+.scraping {
+  color: var(--graph-scraping);
+}
+
+.message {
+  color: var(--graph-message);
 }

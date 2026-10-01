@@ -9,7 +9,7 @@
     "preview": "vite preview --port 5173"
   },
   "dependencies": {
-    "@cosmos.gl/graph": "^2.6.4",
+    "@cosmograph/react": "^2.5.1",
     "date-fns": "^4.4.0",
     "libphonenumber-js": "^1.13.9",
     "lucide-react": "^1.47.0",

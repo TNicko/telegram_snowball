@@ -57,6 +57,17 @@
   background: #1c1c1c;
 }
 
+.iconBtnHighlight {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: var(--primary);
+}
+
+.iconBtnHighlight:hover {
+  background: #fff;
+  color: #0a0a0a;
+}
+
 .iconBtnActive {
   background: #1f1f1f;
 }
