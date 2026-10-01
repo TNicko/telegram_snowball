@@ -326,7 +326,7 @@ export function cloneGraphLayers(layers: GraphLayersConfig = DEFAULT_GRAPH_LAYER
   }
 }
 
-export type GraphLayerPresetId = 'peer-forwards' | 'message-forwards' | 'shared-images'
+export type GraphLayerPresetId = 'peer-forwards' | 'shared-images'
 
 export type GraphLayerPreset = {
   id: GraphLayerPresetId
@@ -341,17 +341,6 @@ export const GRAPH_LAYER_PRESETS: GraphLayerPreset[] = [
     label: 'Peer forward graph',
     description: 'Who forwards from whom across the catalog.',
     layers: cloneGraphLayers(),
-  },
-  {
-    id: 'message-forwards',
-    label: 'Message forward graph',
-    description: 'Each forwarded message, where it was posted, and who forwarded it.',
-    layers: cloneGraphLayers({
-      ...DEFAULT_GRAPH_LAYERS,
-      forwardMessages: true,
-      forwardFrom: false,
-      colorByMedia: true,
-    }),
   },
   {
     id: 'shared-images',

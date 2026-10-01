@@ -96,7 +96,6 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
   const live = jobs.some((job) => isLiveJob(job.status))
   const liveJob = jobs.find((job) => isLiveJob(job.status)) ?? null
   const [view, setView] = useState<GraphViewConfig>(() => loadStoredGraphView())
-  const [layoutEpoch, setLayoutEpoch] = useState(0)
   const [selected, setSelected] = useState<ForwardGraphNode | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [budgetOpen, setBudgetOpen] = useState(false)
@@ -490,7 +489,6 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
           edges={edges}
           selectedId={selectedId}
           view={canvasView}
-          layoutEpoch={layoutEpoch}
           onNodeClick={setSelected}
         />
       ) : null}
@@ -601,11 +599,6 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
         pendingNewNodes={pendingNewNodes}
         onLoadNewNodes={loadNewNodes}
         onFitView={() => graphRef.current?.fitView()}
-        onRestartLayout={() => {
-          graphRef.current?.clearSelection()
-          setSelected(null)
-          setLayoutEpoch((n) => n + 1)
-        }}
       />
 
       {selectedLive && isImageNode(selectedLive) ? (

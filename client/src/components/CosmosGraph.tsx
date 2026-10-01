@@ -23,13 +23,11 @@ type CosmosGraphProps = {
   selectedId?: string | null
   onNodeClick?: (node: ForwardGraphNode | null) => void
   view?: GraphViewConfig
-  layoutEpoch?: number
 }
 
 export type CosmosGraphHandle = {
   clearSelection: () => void
   fitView: () => void
-  restartLayout: () => void
   resume: () => void
   persistLayout: () => void
 }
@@ -108,7 +106,7 @@ function labelClassForNode(node: ForwardGraphNode | undefined): string {
 }
 
 const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function CosmosGraph(
-  { nodes, edges, selectedId = null, onNodeClick, view = DEFAULT_GRAPH_VIEW, layoutEpoch = 0 },
+  { nodes, edges, selectedId = null, onNodeClick, view = DEFAULT_GRAPH_VIEW },
   ref,
 ) {
   const cosmographRef = useRef<CosmographRef>(undefined)
@@ -164,9 +162,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
       if (padding == null) cosmographRef.current?.fitView(250)
       else cosmographRef.current?.fitView(250, padding)
     },
-    restartLayout: () => {
-      cosmographRef.current?.start()
-    },
     resume: () => {
       cosmographRef.current?.unpause()
     },
@@ -188,13 +183,6 @@ const CosmosGraph = forwardRef<CosmosGraphHandle, CosmosGraphProps>(function Cos
     // Third argument selects the point's neighbours and their edges, which is the library default.
     graph.selectPoint(index, false, true)
   }, [selectedId, nodes])
-
-  const lastEpochRef = useRef(layoutEpoch)
-  useEffect(() => {
-    if (lastEpochRef.current === layoutEpoch) return
-    lastEpochRef.current = layoutEpoch
-    cosmographRef.current?.start()
-  }, [layoutEpoch])
 
   // Mark a force change, then start only from onConfigUpdated so the new values are already applied.
   const simulationKey = [

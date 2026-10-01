@@ -21,7 +21,7 @@ Crawl  -  Collect  -  Process  -  Analyse
 - 🔭 **Scope:** Drop example images (or a caption, with a multimodal vision model). Rescore the catalog so the next snowball prefers channels that look like those examples.
 - 📚 **Catalogs:** Browse peers, messages, images, videos, and files. Filter, search, open a peer, export a slice.
 - 🧠 **Meaning search:** Once vectors exist, search messages and images by meaning — not just keywords.
-- 🕸️ **Graphs:** Who forwards from whom. Switch to each forwarded message, or to **shared images** — the same photo in two chats even when it was never forwarded.
+- 🕸️ **Graphs:** Who forwards from whom, or **shared images** — the same photo in two chats even when it was never forwarded.
 - 🖼️ **pHash:** Fingerprint photos so reused media clusters together, alongside vision embeddings.
 - 🧩 **Local models:** Download a vision model (SigLIP / CLIP / MobileNet) and a text model (E5 / BGE) onto disk. Turn embedding off to scrape without them.
 - 💬 **Your session:** Sign in once. Dialogues and profile photos load in the background. Media, models, and the session stay on this machine.
@@ -37,7 +37,9 @@ Crawl  -  Collect  -  Process  -  Analyse
 docker compose up --build
 ```
 
-Open http://127.0.0.1:8080. The first-run wizard walks through creating a Telegram API app, then signing in (phone → code → 2FA). After login you land on Home; dialogues (peer full + profile photos only) start loading in the background.
+Then open **[http://127.0.0.1:8080](http://127.0.0.1:8080)**.
+
+The first-run wizard walks through creating a Telegram API app, then signing in (phone → code → 2FA). After login you land on Home; dialogues (peer full + profile photos only) start loading in the background.
 
 Compose services:
 
@@ -55,3 +57,15 @@ Data that survives restart:
 - `./data` — media, embedding markers, `secret.key`
 
 Stop with Ctrl+C, or `docker compose down`. Add `-v` only if you want to wipe the database volume.
+
+## Screenshots
+
+<p>
+  <img src="docs/readme/home.png" alt="Home, with stopped and finished crawl jobs" width="100%">
+</p>
+<p>
+  <img src="docs/readme/catalog.png" alt="Peer catalog" width="100%">
+</p>
+<p>
+  <img src="docs/readme/graph.png" alt="Forward graph" width="100%">
+</p>
