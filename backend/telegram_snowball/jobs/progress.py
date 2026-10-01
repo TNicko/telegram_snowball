@@ -4,14 +4,28 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from psycopg.types.json import Jsonb
 from psycopg import AsyncConnection
+from psycopg.types.json import Jsonb
 
+from telegram_snowball.jobwait import (
+    JobCancelled,
+    await_unless_cancelled,
+    end_transaction,
+    job_is_cancelled,
+)
 from telegram_snowball.jsonutil import json_safe
 
-
-class JobCancelled(Exception):
-    """The job was cancelled while the worker was still running it."""
+__all__ = [
+    "JobCancelled",
+    "await_unless_cancelled",
+    "end_transaction",
+    "job_is_cancelled",
+    "mark_peer_idle",
+    "mark_peer_scraping",
+    "raise_if_cancelled",
+    "update_job_progress",
+    "utcnow",
+]
 
 
 async def update_job_progress(
@@ -29,12 +43,6 @@ async def update_job_progress(
         (Jsonb(json_safe(progress)), job_id),
     )
     await conn.commit()
-
-
-async def job_is_cancelled(conn: AsyncConnection[Any], job_id: UUID) -> bool:
-    row = await conn.execute("SELECT status FROM jobs WHERE id = %s", (job_id,))
-    data = await row.fetchone()
-    return data is not None and data["status"] == "cancelled"
 
 
 async def raise_if_cancelled(conn: AsyncConnection[Any], job_id: UUID) -> None:

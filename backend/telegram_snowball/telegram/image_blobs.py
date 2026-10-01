@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from telethon.errors import FloodWaitError
 from telethon.tl.types import Message
 
 from telegram_snowball.config import Settings
+from telegram_snowball.jobwait import JobCancelled, await_unless_cancelled, end_transaction
 from telegram_snowball.jsonutil import json_safe
 from telegram_snowball.phash import is_dedupable_phash, normalize_phash_hex, phash_hex_from_bytes
 from telegram_snowball.telegram.image_files import persist_image_bytes, persisted_file, put_image_cache
@@ -157,6 +159,7 @@ async def harvest_message_image(
     peer_id: int,
     media: dict[str, Any] | None,
     persist: bool = False,
+    job_id: UUID | None = None,
 ) -> bool:
     """Temporarily download an image, pHash it, fan out, optionally persist the file."""
     existing = dict(media) if isinstance(media, dict) else {}
@@ -207,8 +210,15 @@ async def harvest_message_image(
             return True
 
     try:
-        payload = await _download_image_bytes(client, message)
+        download = _download_image_bytes(client, message)
+        if job_id is None:
+            await end_transaction(conn)
+            payload = await download
+        else:
+            payload = await await_unless_cancelled(conn, job_id, download)
     except FloodWaitError:
+        raise
+    except JobCancelled:
         raise
     except Exception as exc:
         lg.warning("image download failed for peer %s msg %s: %s", peer_id, message.id, exc)

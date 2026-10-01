@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
 from uuid import UUID
 
+import psycopg
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
+from pydantic import BaseModel, Field
 
 from telegram_snowball.api.routes.dialogues import PUBLIC_PEER_COLUMNS, load_public_peer, public_peer
 from telegram_snowball.catalog import stored_kind_is
@@ -17,6 +19,7 @@ from telegram_snowball.models_health import EmbeddingGateError, assert_snowball_
 from telegram_snowball.telegram.ids import infer_peer_id_kind
 
 router = APIRouter()
+lg = logging.getLogger(__name__)
 
 TaskType = Literal["fetch_dialogues", "forward_snowball", "embed", "scope_rerank"]
 
@@ -255,16 +258,36 @@ async def cancel_job(job_id: UUID) -> dict[str, Any]:
         )
         job = await row.fetchone()
         if job is None:
-            existing = await conn.execute("SELECT id, status FROM jobs WHERE id = %s", (job_id,))
+            existing = await conn.execute(
+                """
+                SELECT id, task_type, status, params, progress, error,
+                       created_at, started_at, finished_at
+                FROM jobs WHERE id = %s
+                """,
+                (job_id,),
+            )
             found = await existing.fetchone()
             if found is None:
                 raise HTTPException(status_code=404, detail="Job not found")
-            raise HTTPException(status_code=409, detail=f"Job is {found['status']} and cannot be stopped.")
+            if found["status"] != "cancelled":
+                raise HTTPException(
+                    status_code=409, detail=f"Job is {found['status']} and cannot be stopped."
+                )
+            job = found
+        else:
+            # Publish Stopped before clearing peer flags. Those rows can be locked
+            # for the whole time a scrape is waiting on Telegram.
+            await conn.commit()
         if lane_for(job["task_type"]) == "scrape":
-            await conn.execute(
-                "UPDATE peers SET is_scraping = false, scrape_detail = NULL WHERE is_scraping = true"
-            )
-        await conn.commit()
+            try:
+                await conn.execute("SET LOCAL lock_timeout = '2s'")
+                await conn.execute(
+                    "UPDATE peers SET is_scraping = false, scrape_detail = NULL WHERE is_scraping = true"
+                )
+                await conn.commit()
+            except psycopg.errors.LockNotAvailable:
+                await conn.rollback()
+                lg.info("job %s cancelled; peer flags stay until the scrape releases them", job_id)
         jobs = await _attach_seed_peers(conn, [dict(job)], data_dir=settings.data_dir)
         jobs = await _attach_job_stats(conn, jobs)
     return jobs[0]

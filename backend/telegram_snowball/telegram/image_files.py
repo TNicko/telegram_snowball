@@ -6,6 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from psycopg.types.json import Jsonb
 from telethon import TelegramClient
@@ -13,11 +14,19 @@ from telethon.errors import FloodWaitError
 from telethon.tl.types import Message
 
 from telegram_snowball.config import Settings
+from telegram_snowball.jobwait import JobCancelled, await_unless_cancelled, end_transaction
 from telegram_snowball.phash import is_dedupable_phash, normalize_phash_hex
 from telegram_snowball.telegram.profile_photos import sniff_media_bytes, sniff_profile_media, suffix_for_content_type
 from telegram_snowball.telegram.resolve import entity_for_peer
 
 lg = logging.getLogger(__name__)
+
+
+async def _telegram_call(conn: Any, job_id: UUID | None, awaitable: Any) -> Any:
+    if job_id is None:
+        await end_transaction(conn)
+        return await awaitable
+    return await await_unless_cancelled(conn, job_id, awaitable)
 
 CACHE_LIMIT = 1000
 telegram_io_lock = asyncio.Lock()
@@ -268,6 +277,8 @@ async def fetch_image_from_telegram(
     conn: Any,
     settings: Settings,
     phash_hex: str,
+    *,
+    job_id: UUID | None = None,
 ) -> Path:
     normalized = normalize_phash_hex(phash_hex)
     if not is_dedupable_phash(normalized):
@@ -285,14 +296,17 @@ async def fetch_image_from_telegram(
     rows = await sources.fetchall()
     if not rows:
         raise ImageUnavailable(404, "No Telegram source for this image")
+    await end_transaction(conn)
     last_error: Exception | None = None
     for row in rows:
         peer_id = int(row["peer_external_id"])
         msg_id = int(row["telegram_message_id"])
         try:
-            entity = await entity_for_peer(client, conn, peer_id)
-            got = await client.get_messages(entity, ids=msg_id)
+            entity = await _telegram_call(conn, job_id, entity_for_peer(client, conn, peer_id))
+            got = await _telegram_call(conn, job_id, client.get_messages(entity, ids=msg_id))
         except FloodWaitError:
+            raise
+        except JobCancelled:
             raise
         except Exception as exc:
             last_error = exc
@@ -302,8 +316,10 @@ async def fetch_image_from_telegram(
         if not isinstance(message, Message):
             continue
         try:
-            payload = await _download_message_bytes(client, message)
+            payload = await _telegram_call(conn, job_id, _download_message_bytes(client, message))
         except FloodWaitError:
+            raise
+        except JobCancelled:
             raise
         except Exception as exc:
             last_error = exc
@@ -356,6 +372,7 @@ async def persist_catalog_image(
     *,
     allow_telegram: bool,
     client: TelegramClient | None = None,
+    job_id: UUID | None = None,
 ) -> str:
     existing = await persisted_file(conn, settings, phash_hex)
     if existing is not None:
@@ -365,7 +382,9 @@ async def persist_catalog_image(
     if source is None:
         if not allow_telegram or client is None:
             raise ImageUnavailable(404, "Image is not available locally")
-        source = await fetch_image_from_telegram(client, conn, settings, phash_hex)
+        source = await fetch_image_from_telegram(
+            client, conn, settings, phash_hex, job_id=job_id
+        )
     data = source.read_bytes()
     kind, content_type = sniff_profile_media(source)
     suffix = suffix_for_content_type(content_type if kind == "image" else None)

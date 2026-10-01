@@ -15,7 +15,14 @@ from telethon.tl.types import Message, PeerChannel, PeerChat, PeerUser
 from telegram_snowball.catalog import _STORED_MEDIA_KIND_SQL
 from telegram_snowball.config import Settings
 from telegram_snowball.jobs.fetch_dialogues import _persist_message
-from telegram_snowball.jobs.progress import JobCancelled, mark_peer_idle, mark_peer_scraping, raise_if_cancelled, update_job_progress
+from telegram_snowball.jobs.progress import (
+    JobCancelled,
+    await_unless_cancelled,
+    mark_peer_idle,
+    mark_peer_scraping,
+    raise_if_cancelled,
+    update_job_progress,
+)
 from telegram_snowball.telegram.client import telegram_client
 from telegram_snowball.telegram.coverage import refresh_fetch_coverage, upsert_media_coverage
 from telegram_snowball.telegram.forwards import fwd_from_name, persist_forward_occurrence, signed_peer_from_fwd
@@ -313,6 +320,7 @@ async def _harvest_image(
     peer_id: int,
     stored_media: dict[str, Any] | None,
     persist: bool,
+    job_id: UUID,
 ) -> None:
     for attempt in range(2):
         try:
@@ -325,10 +333,15 @@ async def _harvest_image(
                 peer_id=peer_id,
                 media=stored_media,
                 persist=persist,
+                job_id=job_id,
             )
             return
         except FloodWaitError as err:
-            await asyncio.sleep(int(getattr(err, "seconds", 1) or 1) + 1)
+            await await_unless_cancelled(
+                conn,
+                job_id,
+                asyncio.sleep(int(getattr(err, "seconds", 1) or 1) + 1),
+            )
             if attempt == 1:
                 lg.warning("image harvest floodwait for peer %s msg %s", peer_id, message.id)
 
@@ -466,10 +479,13 @@ async def _persist_remaining_images(
                 phash,
                 allow_telegram=True,
                 client=client,
+                job_id=job_id,
             )
             persisted += 1
         except FloodWaitError as err:
-            await asyncio.sleep(int(getattr(err, "seconds", 1) or 1) + 1)
+            await await_unless_cancelled(
+                conn, job_id, asyncio.sleep(int(getattr(err, "seconds", 1) or 1) + 1)
+            )
             try:
                 await persist_catalog_image(
                     conn,
@@ -477,10 +493,15 @@ async def _persist_remaining_images(
                     phash,
                     allow_telegram=True,
                     client=client,
+                    job_id=job_id,
                 )
                 persisted += 1
+            except JobCancelled:
+                raise
             except (FloodWaitError, ImageUnavailable, Exception) as retry_err:
                 lg.info("image persist remainder skip %s: %s", phash, retry_err)
+        except JobCancelled:
+            raise
         except ImageUnavailable as err:
             lg.info("image persist remainder skip %s: %s", phash, err)
         except Exception as err:
@@ -519,14 +540,24 @@ async def _hash_remaining_images(
         ids = [int(row["telegram_message_id"]) for row in chunk]
         by_id = {int(row["telegram_message_id"]): row for row in chunk}
         try:
-            got = await client.get_messages(entity, ids=ids)
+            got = await await_unless_cancelled(
+                conn, job_id, client.get_messages(entity, ids=ids)
+            )
         except FloodWaitError as err:
-            await asyncio.sleep(int(getattr(err, "seconds", 1) or 1) + 1)
+            await await_unless_cancelled(
+                conn, job_id, asyncio.sleep(int(getattr(err, "seconds", 1) or 1) + 1)
+            )
             try:
-                got = await client.get_messages(entity, ids=ids)
+                got = await await_unless_cancelled(
+                    conn, job_id, client.get_messages(entity, ids=ids)
+                )
+            except JobCancelled:
+                raise
             except Exception as retry_err:
                 lg.info("image remainder get_messages failed peer %s: %s", peer_id, retry_err)
                 continue
+        except JobCancelled:
+            raise
         except Exception as err:
             lg.info("image remainder get_messages failed peer %s: %s", peer_id, err)
             continue
@@ -548,6 +579,7 @@ async def _hash_remaining_images(
                 peer_id=peer_id,
                 stored_media=stored.get("media") if isinstance(stored.get("media"), dict) else None,
                 persist=persist,
+                job_id=job_id,
             )
             harvested += 1
         done = min(start + len(chunk), len(missing))
@@ -704,13 +736,16 @@ async def run_forward_snowball(
                 nonlocal messages_scraped, total_messages, walk_oldest_id
                 offset_id = start_offset_id
                 while True:
-                    await raise_if_cancelled(conn, job_id)
                     try:
-                        page = await get_history_page(
-                            client, entity, offset_id=offset_id, min_id=min_id
+                        page = await await_unless_cancelled(
+                            conn,
+                            job_id,
+                            get_history_page(client, entity, offset_id=offset_id, min_id=min_id),
                         )
                     except FloodWaitError as err:
-                        await asyncio.sleep(int(err.seconds) + 1)
+                        await await_unless_cancelled(
+                            conn, job_id, asyncio.sleep(int(err.seconds) + 1)
+                        )
                         continue
                     if not page.messages:
                         break
@@ -753,6 +788,7 @@ async def run_forward_snowball(
                                 peer_id=peer_id,
                                 stored_media=stored_media,
                                 persist=include_images,
+                                job_id=job_id,
                             )
                         if not inserted:
                             continue

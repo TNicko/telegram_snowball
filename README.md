@@ -26,6 +26,35 @@ Crawl  -  Collect  -  Process  -  Analyse
 - 🧩 **Local models:** Download a vision model (SigLIP / CLIP / MobileNet) and a text model (E5 / BGE) onto disk. Turn embedding off to scrape without them.
 - 💬 **Your session:** Sign in once. Dialogues and profile photos load in the background. Media, models, and the session stay on this machine.
 
+<p>
+  <img src="docs/readme/home.png" alt="Home, with stopped and finished crawl jobs" width="100%">
+</p>
+
+### Start crawling jobs
+
+- Set up optional image and text embedding models on Home, or leave them off and scrape without vectors.
+- Add scope inputs — example images, or a text prompt when the vision model is multimodal — so the next snowball prefers channels that look like them.
+- Start from `@username` or a peer id, then choose depth, a date window, whether to keep images and videos, and whether to embed as you go.
+
+<p>
+  <img src="docs/readme/catalog.png" alt="Peer catalog" width="100%">
+</p>
+
+### Build a catalog
+
+- Browse peers, messages, images, videos, and files, and open a peer to see what was collected from it.
+- Search by name, handle, or keywords, and by meaning once messages or images have been embedded.
+- Export the current slice of peers, messages, or media.
+
+<p>
+  <img src="docs/readme/graph.png" alt="Forward graph" width="100%">
+</p>
+
+### Analyse your networks
+
+- **Peer forward graph:** who forwards from whom across the catalog.
+- **Shared image graph:** the same photo in two or more chats, including copies that were never forwarded.
+
 ## Requirements
 
 - [Docker](https://docs.docker.com/get-docker/) with Compose v2 (macOS, Linux, or Windows)
@@ -57,15 +86,3 @@ Data that survives restart:
 - `./data` — media, embedding markers, `secret.key`
 
 Stop with Ctrl+C, or `docker compose down`. Add `-v` only if you want to wipe the database volume.
-
-## Screenshots
-
-<p>
-  <img src="docs/readme/home.png" alt="Home, with stopped and finished crawl jobs" width="100%">
-</p>
-<p>
-  <img src="docs/readme/catalog.png" alt="Peer catalog" width="100%">
-</p>
-<p>
-  <img src="docs/readme/graph.png" alt="Forward graph" width="100%">
-</p>

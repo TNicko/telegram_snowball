@@ -154,7 +154,14 @@ export default function HomePage() {
       const stopped = await api.cancelJob(job.id)
       setJobs((current) => current.map((item) => (item.id === stopped.id ? stopped : item)))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not stop job')
+      const message = err instanceof Error ? err.message : 'Could not stop job'
+      if (/cancelled/i.test(message)) {
+        setJobs((current) =>
+          current.map((item) => (item.id === job.id ? { ...item, status: 'cancelled' } : item)),
+        )
+      } else {
+        setError(message)
+      }
     } finally {
       setBusy(false)
     }
