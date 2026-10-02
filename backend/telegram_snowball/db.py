@@ -48,6 +48,10 @@ async def apply_schema(conn: psycopg.AsyncConnection[Any]) -> None:
 
     await purge_probe_only_messages(conn)
     await conn.commit()
+    from telegram_snowball.peer_counts import backfill_peer_counts
+
+    await backfill_peer_counts(conn)
+    await conn.commit()
 
 
 @asynccontextmanager

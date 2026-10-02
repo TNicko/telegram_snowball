@@ -93,7 +93,7 @@ export default function GraphPage({ active = true }: { active?: boolean }) {
   const status = useAppStatus()
   const { jobs, setJobs } = useSnowballJobs()
   const { running: dialoguesRunning, stop: stopChatSync } = useDialogueSync()
-  const live = jobs.some((job) => isLiveJob(job.status))
+  const live = dialoguesRunning || jobs.some((job) => isLiveJob(job.status))
   const liveJob = jobs.find((job) => isLiveJob(job.status)) ?? null
   const [view, setView] = useState<GraphViewConfig>(() => loadStoredGraphView())
   const [selected, setSelected] = useState<ForwardGraphNode | null>(null)

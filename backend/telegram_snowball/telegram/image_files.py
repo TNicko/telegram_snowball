@@ -128,20 +128,32 @@ async def evict_image_cache(conn: Any, settings: Settings) -> None:
     extra = total - CACHE_LIMIT
     if extra <= 0:
         return
-    dropped = await conn.execute(
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    doomed = await conn.execute(
         """
-        DELETE FROM image_cache
-        WHERE phash IN (
-            SELECT phash FROM image_cache
-            ORDER BY created_at ASC, phash
-            LIMIT %s
-        )
-        RETURNING cache_path
+        SELECT phash FROM image_cache
+        ORDER BY created_at ASC, phash
+        LIMIT %s
         """,
         (extra,),
     )
+    phashes = [str(row["phash"]) for row in await doomed.fetchall()]
+    if not phashes:
+        return
+    before = {phash: await phash_peer_snapshot(conn, phash) for phash in phashes}
+    dropped = await conn.execute(
+        """
+        DELETE FROM image_cache
+        WHERE phash = ANY(%s)
+        RETURNING phash, cache_path
+        """,
+        (phashes,),
+    )
     for row in await dropped.fetchall():
         _unlink_rel(settings, row["cache_path"])
+    for phash, snapshot in before.items():
+        await apply_phash_snapshot(conn, phash, snapshot)
 
 
 async def put_image_cache(
@@ -155,6 +167,9 @@ async def put_image_cache(
     normalized = normalize_phash_hex(phash_hex)
     if not is_dedupable_phash(normalized):
         raise ValueError("invalid phash")
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    before = await phash_peer_snapshot(conn, normalized)
     rel = cache_rel_path(normalized, suffix)
     dest = settings.data_dir / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -176,6 +191,7 @@ async def put_image_cache(
         (normalized, rel),
     )
     await evict_image_cache(conn, settings)
+    await apply_phash_snapshot(conn, normalized, before)
     return rel
 
 
@@ -183,6 +199,9 @@ async def drop_image_cache(conn: Any, settings: Settings, phash_hex: str) -> Non
     normalized = normalize_phash_hex(phash_hex)
     if not is_dedupable_phash(normalized):
         return
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    before = await phash_peer_snapshot(conn, normalized)
     row = await conn.execute(
         "DELETE FROM image_cache WHERE phash = %s RETURNING cache_path",
         (normalized,),
@@ -190,9 +209,21 @@ async def drop_image_cache(conn: Any, settings: Settings, phash_hex: str) -> Non
     found = await row.fetchone()
     if found:
         _unlink_rel(settings, found["cache_path"])
+        await apply_phash_snapshot(conn, normalized, before)
 
 
 async def mark_messages_downloaded(conn: Any, phash_hex: str, *, downloaded: bool, path: str | None) -> None:
+    flipped = await conn.execute(
+        """
+        SELECT peer_external_id, COUNT(*)::int AS n
+        FROM messages
+        WHERE id IN (SELECT message_id FROM image_blob_messages WHERE phash = %s)
+          AND COALESCE(media->>'downloaded' IN ('true', 't', '1'), false) IS DISTINCT FROM %s
+        GROUP BY peer_external_id
+        """,
+        (phash_hex, downloaded),
+    )
+    changed = await flipped.fetchall()
     await conn.execute(
         """
         UPDATE messages
@@ -206,6 +237,16 @@ async def mark_messages_downloaded(conn: Any, phash_hex: str, *, downloaded: boo
         """,
         (Jsonb(downloaded), Jsonb(path), phash_hex),
     )
+    if changed:
+        from telegram_snowball.peer_counts import bump_peer_counts
+
+        sign = 1 if downloaded else -1
+        for row in changed:
+            await bump_peer_counts(
+                conn,
+                int(row["peer_external_id"]),
+                {"image_downloaded": sign * int(row["n"])},
+            )
 
 
 async def persist_image_bytes(
@@ -219,6 +260,9 @@ async def persist_image_bytes(
     normalized = normalize_phash_hex(phash_hex)
     if not is_dedupable_phash(normalized):
         raise ImageUnavailable(404, "Image not found")
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    before = await phash_peer_snapshot(conn, normalized)
     rel = canonical_rel_path(normalized, suffix)
     dest = settings.data_dir / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +277,7 @@ async def persist_image_bytes(
     )
     await drop_image_cache(conn, settings, normalized)
     await mark_messages_downloaded(conn, normalized, downloaded=True, path=rel)
+    await apply_phash_snapshot(conn, normalized, before)
     return rel
 
 
@@ -247,6 +292,9 @@ async def clear_persisted_image(conn: Any, settings: Settings, phash_hex: str) -
     found = await row.fetchone()
     if found is None:
         raise ImageUnavailable(404, "Image not found")
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    before = await phash_peer_snapshot(conn, normalized)
     _unlink_rel(settings, found["canonical_path"])
     await conn.execute(
         """
@@ -257,6 +305,7 @@ async def clear_persisted_image(conn: Any, settings: Settings, phash_hex: str) -
         (normalized,),
     )
     await mark_messages_downloaded(conn, normalized, downloaded=False, path=None)
+    await apply_phash_snapshot(conn, normalized, before)
 
 
 async def _download_message_bytes(client: TelegramClient, message: Message) -> bytes | None:

@@ -44,7 +44,7 @@ async def catalog_storage_stats(conn: Any, settings: Settings) -> dict[str, Any]
         await conn.execute(
             """
             SELECT
-              (SELECT COUNT(*) FROM messages)::bigint AS total,
+              (SELECT COALESCE(SUM(posts), 0) FROM peer_counts)::bigint AS total,
               pg_total_relation_size('messages')::bigint AS bytes
             """
         )

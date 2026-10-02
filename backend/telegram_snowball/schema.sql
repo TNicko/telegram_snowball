@@ -373,3 +373,28 @@ CREATE TABLE IF NOT EXISTS peer_scope_forward_events (
 
 CREATE INDEX IF NOT EXISTS peer_scope_forward_events_origin_idx
     ON peer_scope_forward_events (origin_peer_id);
+
+-- Running totals for the catalog. Updated as rows are inserted, never by scanning messages.
+CREATE TABLE IF NOT EXISTS peer_counts (
+    peer_external_id BIGINT PRIMARY KEY REFERENCES peers (external_id) ON DELETE CASCADE,
+    posts INTEGER NOT NULL DEFAULT 0,
+    text_total INTEGER NOT NULL DEFAULT 0,
+    text_embedded INTEGER NOT NULL DEFAULT 0,
+    image_total INTEGER NOT NULL DEFAULT 0,
+    image_hashed INTEGER NOT NULL DEFAULT 0,
+    image_downloaded INTEGER NOT NULL DEFAULT 0,
+    image_unique INTEGER NOT NULL DEFAULT 0,
+    image_persisted INTEGER NOT NULL DEFAULT 0,
+    image_embeddable INTEGER NOT NULL DEFAULT 0,
+    image_embedded_unique INTEGER NOT NULL DEFAULT 0,
+    video_total INTEGER NOT NULL DEFAULT 0,
+    video_downloaded INTEGER NOT NULL DEFAULT 0,
+    audio_total INTEGER NOT NULL DEFAULT 0,
+    audio_downloaded INTEGER NOT NULL DEFAULT 0,
+    gif_total INTEGER NOT NULL DEFAULT 0,
+    gif_downloaded INTEGER NOT NULL DEFAULT 0,
+    document_total INTEGER NOT NULL DEFAULT 0,
+    document_downloaded INTEGER NOT NULL DEFAULT 0,
+    unique_forwards INTEGER NOT NULL DEFAULT 0,
+    total_forwards INTEGER NOT NULL DEFAULT 0
+);

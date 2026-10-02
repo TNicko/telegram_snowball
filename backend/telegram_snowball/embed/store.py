@@ -33,10 +33,20 @@ async def upsert_text_embedding(
         """,
         (message_id, model_id, dim, lit),
     )
-    await conn.execute(
-        "UPDATE messages SET text_embedded = true WHERE id = %s",
+    flipped = await conn.execute(
+        """
+        UPDATE messages
+        SET text_embedded = true
+        WHERE id = %s AND text_embedded = false
+        RETURNING peer_external_id
+        """,
         (message_id,),
     )
+    row = await flipped.fetchone()
+    if row is not None and row["peer_external_id"] is not None:
+        from telegram_snowball.peer_counts import bump_peer_counts
+
+        await bump_peer_counts(conn, int(row["peer_external_id"]), {"text_embedded": 1})
 
 
 async def upsert_image_embedding(
@@ -49,6 +59,9 @@ async def upsert_image_embedding(
     normalized = normalize_phash_hex(phash)
     if not is_dedupable_phash(normalized):
         return
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    before = await phash_peer_snapshot(conn, normalized)
     lit = _vec(values)
     dim = int(len(values))
     await conn.execute(
@@ -74,17 +87,35 @@ async def upsert_image_embedding(
         """,
         (normalized,),
     )
+    await apply_phash_snapshot(conn, normalized, before)
 
 
 async def reset_text_embeddings(conn: Any) -> None:
     await conn.execute("DELETE FROM message_text_embeddings")
     await conn.execute("UPDATE messages SET text_embedded = false")
+    await conn.execute("UPDATE peer_counts SET text_embedded = 0")
 
 
 async def reset_image_embeddings(conn: Any) -> None:
     await conn.execute("DELETE FROM image_embeddings")
     await conn.execute("UPDATE image_blobs SET image_embedded = false")
     await conn.execute("UPDATE messages SET image_embedded = false")
+    await conn.execute(
+        """
+        UPDATE peer_counts pc
+        SET image_embedded_unique = 0,
+            image_embeddable = COALESCE((
+                SELECT COUNT(DISTINCT ibm.phash)::int
+                FROM image_blob_messages ibm
+                JOIN image_blobs b ON b.phash = ibm.phash
+                WHERE ibm.peer_external_id = pc.peer_external_id
+                  AND (
+                    NULLIF(BTRIM(b.canonical_path), '') IS NOT NULL
+                    OR EXISTS (SELECT 1 FROM image_cache c WHERE c.phash = b.phash)
+                  )
+            ), 0)
+        """
+    )
 
 
 async def pending_text_rows(

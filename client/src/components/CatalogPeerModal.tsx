@@ -11,6 +11,7 @@ import {
   type CoverageWindow,
   type EmbedBucket,
   type MediaBucket,
+  type Job,
   type Peer,
   type PeerCoverage,
   type RemainderLayer,
@@ -127,8 +128,10 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
   const [error, setError] = useState<string | null>(null)
   const [busyLayer, setBusyLayer] = useState<RemainderLayer | null>(null)
   const [pendingLayer, setPendingLayer] = useState<RemainderLayer | null>(null)
+  const [embedJob, setEmbedJob] = useState<Job | null>(null)
 
   const scrapeLaneBusy = jobs.some((job) => job.status === 'queued' || job.status === 'running')
+  const embedLive = embedJob?.status === 'queued' || embedJob?.status === 'running'
   const shown = coverage?.peer ?? peer
   const handle = shown.username ? `@${shown.username}` : null
 
@@ -148,12 +151,27 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
         })
     }
     load()
+    const track = dialoguesRunning || scrapeLaneBusy || embedLive
+    if (!track) {
+      return () => {
+        cancelled = true
+      }
+    }
     const timer = window.setInterval(load, 1000)
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [peer.external_id])
+  }, [peer.external_id, dialoguesRunning, scrapeLaneBusy, embedLive])
+
+  useEffect(() => {
+    if (!embedJob || (embedJob.status !== 'queued' && embedJob.status !== 'running')) return
+    const id = embedJob.id
+    const timer = window.setInterval(() => {
+      void api.job(id).then(setEmbedJob).catch(() => undefined)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [embedJob?.id, embedJob?.status])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -178,11 +196,11 @@ export function CatalogPeerModal({ peer, onClose }: { peer: Peer; onClose: () =>
       if (!embedding && dialoguesRunning) {
         await stopChatSync()
       }
-      const job =
-        embedding
-          ? await api.createJob('embed', remainderParams(peer.external_id, layer))
-          : await api.createJob('forward_snowball', remainderParams(peer.external_id, layer))
-      setJobs((current) => [job, ...current.filter((item) => item.id !== job.id)])
+      const job = embedding
+        ? await api.createJob('embed', remainderParams(peer.external_id, layer))
+        : await api.createJob('forward_snowball', remainderParams(peer.external_id, layer))
+      if (embedding) setEmbedJob(job)
+      else setJobs((current) => [job, ...current.filter((item) => item.id !== job.id)])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start scrape')
     } finally {

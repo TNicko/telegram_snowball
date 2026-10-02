@@ -6,6 +6,7 @@ import { AccountAvatar } from '../components/AccountAvatar'
 import { CatalogStorageBar } from '../components/CatalogStorageBar'
 import { MobileNav } from '../components/MobileNav'
 import { useDialogueSync } from '../hooks/useDialogueSync'
+import { useSnowballJobs } from '../hooks/useSnowballJobs'
 import { GraphKeepAlive } from './GraphKeepAlive'
 import { accountDisplayName } from '../lib/account'
 import { useAppStatus } from './statusContext'
@@ -33,6 +34,7 @@ export function AppLayout() {
   const account = status?.account ?? null
   const accountName = account ? accountDisplayName(account) : null
   useDialogueSync()
+  useSnowballJobs()
 
   return (
     <div className="shell">

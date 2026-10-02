@@ -12,13 +12,29 @@ export default function JobPage() {
 
   useEffect(() => {
     if (!jobId) return
+    let timer: number | null = null
     const tick = () => {
-      void api.job(jobId).then(setJob).catch((err: Error) => setError(err.message))
-      void api.peers().then((res) => setPeers(res.peers)).catch(() => undefined)
+      void api
+        .job(jobId)
+        .then((next) => {
+          setJob(next)
+          const running = next.status === 'queued' || next.status === 'running'
+          if (running) {
+            void api.peers().then((res) => setPeers(res.peers)).catch(() => undefined)
+            return
+          }
+          if (timer != null) {
+            window.clearInterval(timer)
+            timer = null
+          }
+        })
+        .catch((err: Error) => setError(err.message))
     }
     tick()
-    const timer = window.setInterval(tick, 2000)
-    return () => window.clearInterval(timer)
+    timer = window.setInterval(tick, 2000)
+    return () => {
+      if (timer != null) window.clearInterval(timer)
+    }
   }, [jobId])
 
   const current = Number(job?.progress?.current_peer ?? 0)

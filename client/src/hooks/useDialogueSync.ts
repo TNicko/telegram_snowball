@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type Job, type Peer } from '../lib/api'
+import { catalogIsChanging, setSyncLive, subscribeLiveWork } from '../lib/liveWork'
 
 type Snapshot = {
   job: Job | null
@@ -20,39 +21,9 @@ let subscribers = 0
 let timer: number | null = null
 let pollGeneration = 0
 let peersInFlight = false
+let stopLiveWatch: (() => void) | null = null
 
-function emit(patch: Partial<Snapshot>) {
-  snapshot = { ...snapshot, ...patch }
-  for (const listener of listeners) listener()
-}
-
-function isLiveJob(job: Job | null | undefined): job is Job {
-  return job != null && (job.status === 'queued' || job.status === 'running')
-}
-
-function isDialogueJob(job: Job | null | undefined): job is Job {
-  return job?.task_type === 'fetch_dialogues'
-}
-
-function tick(generation: number) {
-  void api
-    .status()
-    .then((status) => {
-      if (generation !== pollGeneration) return
-      const active = status.active_job
-      if (isDialogueJob(active) && isLiveJob(active)) {
-        emit({ job: active })
-        return
-      }
-      const prev = snapshot.job
-      if (isDialogueJob(prev) && isLiveJob(prev)) {
-        emit({ job: { ...prev, status: 'succeeded' } })
-      } else if (prev && !isDialogueJob(prev)) {
-        emit({ job: null })
-      }
-    })
-    .catch(() => undefined)
-
+function refreshPeers(generation: number) {
   if (peersInFlight) return
   peersInFlight = true
   void api
@@ -68,6 +39,58 @@ function tick(generation: number) {
     .finally(() => {
       peersInFlight = false
     })
+}
+
+function ensurePeerPolling() {
+  if (subscribers === 0 || !catalogIsChanging()) {
+    if (timer != null) {
+      window.clearInterval(timer)
+      timer = null
+      refreshPeers(pollGeneration)
+    }
+    return
+  }
+  if (timer == null) {
+    timer = window.setInterval(() => tick(pollGeneration), 1000)
+  }
+}
+
+function emit(patch: Partial<Snapshot>) {
+  snapshot = { ...snapshot, ...patch }
+  setSyncLive(isDialogueJob(snapshot.job) && isLiveJob(snapshot.job))
+  ensurePeerPolling()
+  for (const listener of listeners) listener()
+}
+
+function isLiveJob(job: Job | null | undefined): job is Job {
+  return job != null && (job.status === 'queued' || job.status === 'running')
+}
+
+function isDialogueJob(job: Job | null | undefined): job is Job {
+  return job?.task_type === 'fetch_dialogues'
+}
+
+function tick(generation: number) {
+  if (isDialogueJob(snapshot.job) && isLiveJob(snapshot.job)) {
+    void api
+      .status()
+      .then((status) => {
+        if (generation !== pollGeneration) return
+        const active = status.active_job
+        if (isDialogueJob(active) && isLiveJob(active)) {
+          emit({ job: active })
+          return
+        }
+        const prev = snapshot.job
+        if (isDialogueJob(prev) && isLiveJob(prev)) {
+          emit({ job: { ...prev, status: 'succeeded' } })
+        } else if (prev && !isDialogueJob(prev)) {
+          emit({ job: null })
+        }
+      })
+      .catch(() => undefined)
+  }
+  if (catalogIsChanging()) refreshPeers(generation)
 }
 
 let refreshInFlight = false
@@ -118,15 +141,19 @@ function subscribe() {
         if (generation !== pollGeneration) return
         emit({ error: err.message, ready: true })
       })
-    tick(generation)
-    timer = window.setInterval(() => tick(generation), 1000)
+    stopLiveWatch = subscribeLiveWork(ensurePeerPolling)
+    ensurePeerPolling()
   }
   return () => {
     subscribers -= 1
-    if (subscribers === 0 && timer != null) {
+    if (subscribers === 0) {
       pollGeneration += 1
-      window.clearInterval(timer)
-      timer = null
+      stopLiveWatch?.()
+      stopLiveWatch = null
+      if (timer != null) {
+        window.clearInterval(timer)
+        timer = null
+      }
     }
   }
 }

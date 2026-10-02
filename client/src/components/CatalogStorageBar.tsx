@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type CatalogStorageStats } from '../lib/api'
+import { catalogIsChanging, subscribeLiveWork } from '../lib/liveWork'
 import s from './CatalogStorageBar.module.css'
 
 const countFmt = new Intl.NumberFormat()
@@ -36,10 +37,26 @@ export function CatalogStorageBar() {
         .catch(() => undefined)
     }
     load()
-    const timer = window.setInterval(load, 60_000)
+    let timer: number | null = null
+    if (catalogIsChanging()) timer = window.setInterval(load, 60_000)
+    const sync = () => {
+      if (cancelled) return
+      if (catalogIsChanging()) {
+        load()
+        if (timer == null) timer = window.setInterval(load, 60_000)
+        return
+      }
+      if (timer != null) {
+        window.clearInterval(timer)
+        timer = null
+        load()
+      }
+    }
+    const stop = subscribeLiveWork(sync)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      stop()
+      if (timer != null) window.clearInterval(timer)
     }
   }, [])
 

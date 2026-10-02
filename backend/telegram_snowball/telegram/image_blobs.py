@@ -57,6 +57,7 @@ async def link_blob_message(
     message_date: datetime | None,
     peer_external_id: int | None,
     telegram_message_id: int | None = None,
+    adjust_counts: bool = True,
 ) -> None:
     normalized = normalize_phash_hex(phash_hex)
     message_uuid = _as_uuid(message_id)
@@ -67,6 +68,11 @@ async def link_blob_message(
         or peer_external_id is None
     ):
         return
+    before = None
+    if adjust_counts:
+        from telegram_snowball.peer_counts import phash_peer_snapshot
+
+        before = await phash_peer_snapshot(conn, normalized)
     await conn.execute(
         """
         INSERT INTO image_blob_messages (
@@ -93,6 +99,10 @@ async def link_blob_message(
         """,
         (normalized, normalized),
     )
+    if before is not None:
+        from telegram_snowball.peer_counts import apply_phash_snapshot
+
+        await apply_phash_snapshot(conn, normalized, before)
 
 
 async def record_harvested_image_blob(
@@ -108,6 +118,9 @@ async def record_harvested_image_blob(
     normalized = normalize_phash_hex(phash_hex)
     if not is_dedupable_phash(normalized):
         return canonical_path
+    from telegram_snowball.peer_counts import apply_phash_snapshot, phash_peer_snapshot
+
+    before = await phash_peer_snapshot(conn, normalized)
     row = await conn.execute(
         """
         INSERT INTO image_blobs (phash, canonical_path, refcount)
@@ -132,7 +145,9 @@ async def record_harvested_image_blob(
         message_date=message_date,
         peer_external_id=peer_external_id,
         telegram_message_id=telegram_message_id,
+        adjust_counts=False,
     )
+    await apply_phash_snapshot(conn, normalized, before)
     return keeper
 
 
@@ -163,6 +178,7 @@ async def harvest_message_image(
 ) -> bool:
     """Temporarily download an image, pHash it, fan out, optionally persist the file."""
     existing = dict(media) if isinstance(media, dict) else {}
+    had_phash = _has_image_phash(existing)
     already = existing.get("phash")
     if not is_dedupable_phash(already if isinstance(already, str) else None):
         linked = await conn.execute(
@@ -207,6 +223,10 @@ async def harvest_message_image(
                 "UPDATE messages SET media = %s WHERE id = %s",
                 (Jsonb(json_safe(next_media)), message_uuid),
             )
+            if not had_phash:
+                from telegram_snowball.peer_counts import bump_peer_counts
+
+                await bump_peer_counts(conn, peer_id, {"image_hashed": 1})
             return True
 
     try:
@@ -282,4 +302,8 @@ async def harvest_message_image(
         "UPDATE messages SET media = %s WHERE id = %s",
         (Jsonb(json_safe(next_media)), message_uuid),
     )
+    if not had_phash:
+        from telegram_snowball.peer_counts import bump_peer_counts
+
+        await bump_peer_counts(conn, peer_id, {"image_hashed": 1})
     return True

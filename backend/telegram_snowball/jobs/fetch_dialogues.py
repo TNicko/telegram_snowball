@@ -73,7 +73,20 @@ async def _persist_message(
     if stored is None:
         return None
     stored_media = stored["media"] if isinstance(stored["media"], dict) else media
-    return stored["id"], media_kind_from_stored(stored_media) or "", stored_media, bool(stored["inserted"])
+    kind = media_kind_from_stored(stored_media) or ""
+    inserted = bool(stored["inserted"])
+    if inserted:
+        from telegram_snowball.peer_counts import bump_peer_counts, message_insert_deltas
+
+        downloaded = False
+        if isinstance(stored_media, dict):
+            downloaded = stored_media.get("downloaded") in (True, "true", "t", "1", 1)
+        await bump_peer_counts(
+            conn,
+            peer_id,
+            message_insert_deltas(content=content, kind=kind, downloaded=downloaded),
+        )
+    return stored["id"], kind, stored_media, inserted
 
 
 async def run_fetch_dialogues(

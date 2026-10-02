@@ -201,102 +201,14 @@ async def load_catalog_stats(conn: Any) -> tuple[set[int], dict[int, dict[str, A
     )
     media_cov = {int(row["peer_external_id"]): dict(row) for row in await media_rows.fetchall()}
 
-    kind = _STORED_MEDIA_KIND_SQL.strip()
-    msg_rows = await conn.execute(
-        f"""
-        SELECT
-            peer_external_id,
-            COUNT(*)::int AS posts,
-            COUNT(*) FILTER (WHERE NULLIF(BTRIM(content), '') IS NOT NULL)::int AS text_total,
-            COUNT(*) FILTER (
-                WHERE NULLIF(BTRIM(content), '') IS NOT NULL AND text_embedded
-            )::int AS text_embedded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'image' AND image_embedded)::int AS image_embedded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'image')::int AS image_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'image' AND {_IMAGE_HAS_PHASH_SQL}
-            )::int AS image_hashed,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'image' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS image_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'video')::int AS video_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'video' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS video_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'audio')::int AS audio_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'audio' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS audio_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'gif')::int AS gif_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'gif' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS gif_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'document')::int AS document_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'document' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS document_downloaded
-        FROM messages
-        GROUP BY peer_external_id
-        """
-    )
+    from telegram_snowball.peer_counts import load_peer_count_map
+
+    stored = await load_peer_count_map(conn)
     message_stats: dict[int, dict[str, Any]] = {}
-    for row in await msg_rows.fetchall():
-        peer_id = int(row["peer_external_id"])
+    for peer_id, counts in stored.items():
         bucket = _empty_message_stats()
-        bucket["posts"] = int(row["posts"] or 0)
-        bucket["text_total"] = int(row["text_total"] or 0)
-        bucket["text_embedded"] = int(row["text_embedded"] or 0)
-        bucket["image_embedded"] = int(row["image_embedded"] or 0)
-        bucket["image_hashed"] = int(row["image_hashed"] or 0)
-        for media_kind in _MEDIA_KINDS:
-            bucket[f"{media_kind}_total"] = int(row[f"{media_kind}_total"] or 0)
-            bucket[f"{media_kind}_downloaded"] = int(row[f"{media_kind}_downloaded"] or 0)
+        bucket.update(counts)
         message_stats[peer_id] = bucket
-
-    blob_rows = await conn.execute(
-        """
-        SELECT
-            ibm.peer_external_id,
-            COUNT(DISTINCT ibm.phash) AS unique_images,
-            COUNT(DISTINCT ibm.phash) FILTER (
-                WHERE NULLIF(b.canonical_path, '') IS NOT NULL
-            ) AS persisted_images,
-            COUNT(DISTINCT ibm.phash) FILTER (
-                WHERE b.image_embedded
-                   OR NULLIF(BTRIM(b.canonical_path), '') IS NOT NULL
-                   OR EXISTS (SELECT 1 FROM image_cache c WHERE c.phash = b.phash)
-            ) AS embeddable_images,
-            COUNT(DISTINCT ibm.phash) FILTER (
-                WHERE b.image_embedded
-            ) AS embedded_images
-        FROM image_blob_messages ibm
-        JOIN image_blobs b ON b.phash = ibm.phash
-        GROUP BY ibm.peer_external_id
-        """
-    )
-    for row in await blob_rows.fetchall():
-        peer_id = int(row["peer_external_id"])
-        bucket = message_stats.setdefault(peer_id, _empty_message_stats())
-        bucket["image_unique"] = int(row["unique_images"] or 0)
-        bucket["image_persisted"] = int(row["persisted_images"] or 0)
-        bucket["image_embeddable"] = int(row["embeddable_images"] or 0)
-        bucket["image_embedded_unique"] = int(row["embedded_images"] or 0)
-
-    fwd_rows = await conn.execute(
-        """
-        SELECT
-            from_external_id AS peer_external_id,
-            COUNT(*)::int AS unique_forwards,
-            COALESCE(SUM(forward_count), 0)::int AS total_forwards
-        FROM forward_edges
-        GROUP BY from_external_id
-        """
-    )
-    for row in await fwd_rows.fetchall():
-        peer_id = int(row["peer_external_id"])
-        bucket = message_stats.setdefault(peer_id, _empty_message_stats())
-        bucket["unique_forwards"] = int(row["unique_forwards"] or 0)
-        bucket["total_forwards"] = int(row["total_forwards"] or 0)
     return fetch_ids, media_cov, message_stats
 
 
@@ -396,39 +308,14 @@ def build_peer_coverage(
 
 
 async def load_peer_message_stats(conn: Any, peer_id: int) -> dict[str, Any]:
+    from telegram_snowball.peer_counts import load_peer_count
+
     kind = _STORED_MEDIA_KIND_SQL.strip()
+    stats = _empty_message_stats()
+    stats.update(await load_peer_count(conn, peer_id))
     row = await conn.execute(
         f"""
         SELECT
-            COUNT(*)::int AS posts,
-            COUNT(*) FILTER (WHERE NULLIF(BTRIM(content), '') IS NOT NULL)::int AS text_total,
-            COUNT(*) FILTER (
-                WHERE NULLIF(BTRIM(content), '') IS NOT NULL AND text_embedded
-            )::int AS text_embedded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'image' AND image_embedded)::int AS image_embedded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'image')::int AS image_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'image' AND {_IMAGE_HAS_PHASH_SQL}
-            )::int AS image_hashed,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'image' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS image_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'video')::int AS video_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'video' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS video_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'audio')::int AS audio_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'audio' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS audio_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'gif')::int AS gif_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'gif' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS gif_downloaded,
-            COUNT(*) FILTER (WHERE ({kind}) = 'document')::int AS document_total,
-            COUNT(*) FILTER (
-                WHERE ({kind}) = 'document' AND media->>'downloaded' IN ('true', 't', '1')
-            )::int AS document_downloaded,
             MIN(date) FILTER (
                 WHERE ({kind}) = 'image' AND {_IMAGE_HAS_PHASH_SQL}
             ) AS image_after,
@@ -473,79 +360,27 @@ async def load_peer_message_stats(conn: Any, peer_id: int) -> dict[str, Any]:
         (peer_id,),
     )
     data = await row.fetchone()
-    stats = _empty_message_stats()
-    if data is None:
-        return stats
-    stats["posts"] = int(data["posts"] or 0)
-    stats["text_total"] = int(data["text_total"] or 0)
-    stats["text_embedded"] = int(data["text_embedded"] or 0)
-    stats["image_embedded"] = int(data["image_embedded"] or 0)
-    stats["image_hashed"] = int(data["image_hashed"] or 0)
-    for media_kind in _MEDIA_KINDS:
-        stats[f"{media_kind}_total"] = int(data[f"{media_kind}_total"] or 0)
-        stats[f"{media_kind}_downloaded"] = int(data[f"{media_kind}_downloaded"] or 0)
-        stats[f"{media_kind}_after"] = data.get(f"{media_kind}_after")
-        stats[f"{media_kind}_before"] = data.get(f"{media_kind}_before")
-    stats["text_embed_after"] = data.get("text_embed_after")
-    stats["text_embed_before"] = data.get("text_embed_before")
-    stats["image_embed_after"] = data.get("image_embed_after")
-    stats["image_embed_before"] = data.get("image_embed_before")
-
-    blob = await conn.execute(
-        """
-        SELECT
-            COUNT(DISTINCT ibm.phash) AS unique_images,
-            COUNT(DISTINCT ibm.phash) FILTER (
-                WHERE NULLIF(b.canonical_path, '') IS NOT NULL
-            ) AS persisted_images,
-            COUNT(DISTINCT ibm.phash) FILTER (
-                WHERE b.image_embedded
-                   OR NULLIF(BTRIM(b.canonical_path), '') IS NOT NULL
-                   OR EXISTS (SELECT 1 FROM image_cache c WHERE c.phash = b.phash)
-            ) AS embeddable_images,
-            COUNT(DISTINCT ibm.phash) FILTER (
-                WHERE b.image_embedded
-            ) AS embedded_images
-        FROM image_blob_messages ibm
-        JOIN image_blobs b ON b.phash = ibm.phash
-        WHERE ibm.peer_external_id = %s
-        """,
-        (peer_id,),
-    )
-    blob_row = await blob.fetchone()
-    if blob_row is not None:
-        stats["image_unique"] = int(blob_row["unique_images"] or 0)
-        stats["image_persisted"] = int(blob_row["persisted_images"] or 0)
-        stats["image_embeddable"] = int(blob_row["embeddable_images"] or 0)
-        stats["image_embedded_unique"] = int(blob_row["embedded_images"] or 0)
-        if stats.get("image_after") is None and stats["image_unique"] > 0:
-            hashed_span = await conn.execute(
-                """
-                SELECT MIN(ibm.message_date) AS image_after, MAX(ibm.message_date) AS image_before
-                FROM image_blob_messages ibm
-                WHERE ibm.peer_external_id = %s
-                """,
-                (peer_id,),
-            )
-            span = await hashed_span.fetchone()
-            if span is not None:
-                stats["image_after"] = span["image_after"]
-                stats["image_before"] = span["image_before"]
-
-    fwd = await conn.execute(
-        """
-        SELECT
-            COUNT(*)::int AS unique_forwards,
-            COALESCE(SUM(forward_count), 0)::int AS total_forwards
-        FROM forward_edges
-        WHERE from_external_id = %s
-        """,
-        (peer_id,),
-    )
-    fwd_row = await fwd.fetchone()
-    if fwd_row is not None:
-        stats["unique_forwards"] = int(fwd_row["unique_forwards"] or 0)
-        stats["total_forwards"] = int(fwd_row["total_forwards"] or 0)
+    if data is not None:
+        for media_kind in _MEDIA_KINDS:
+            stats[f"{media_kind}_after"] = data.get(f"{media_kind}_after")
+            stats[f"{media_kind}_before"] = data.get(f"{media_kind}_before")
+        stats["text_embed_after"] = data.get("text_embed_after")
+        stats["text_embed_before"] = data.get("text_embed_before")
+        stats["image_embed_after"] = data.get("image_embed_after")
+        stats["image_embed_before"] = data.get("image_embed_before")
+    if stats.get("image_after") is None and int(stats.get("image_unique") or 0) > 0:
+        hashed_span = await conn.execute(
+            """
+            SELECT MIN(message_date) AS image_after, MAX(message_date) AS image_before
+            FROM image_blob_messages
+            WHERE peer_external_id = %s
+            """,
+            (peer_id,),
+        )
+        span = await hashed_span.fetchone()
+        if span is not None:
+            stats["image_after"] = span["image_after"]
+            stats["image_before"] = span["image_before"]
     return stats
 
 

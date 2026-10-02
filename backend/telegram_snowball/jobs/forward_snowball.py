@@ -919,7 +919,7 @@ async def run_forward_snowball(
                 UPDATE peers
                 SET messages_scraped = GREATEST(
                         messages_scraped,
-                        (SELECT COUNT(*)::int FROM messages WHERE peer_external_id = %s)
+                        COALESCE((SELECT posts FROM peer_counts WHERE peer_external_id = %s), 0)
                     ),
                     is_scraping = false,
                     scrape_detail = NULL,

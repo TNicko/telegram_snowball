@@ -131,7 +131,7 @@ async def persist_forward_occurrence(
         return False
     from_type = from_peer_type or infer_peer_type_from_signed(from_peer_id)
     to_type = to_peer_type or infer_peer_type_from_signed(to_peer_id)
-    await conn.execute(
+    edge = await conn.execute(
         """
         INSERT INTO forward_edges (
             from_external_id, to_external_id, from_peer_type, to_peer_type,
@@ -143,9 +143,12 @@ async def persist_forward_occurrence(
             last_seen_at = now(),
             from_peer_type = COALESCE(EXCLUDED.from_peer_type, forward_edges.from_peer_type),
             to_peer_type = COALESCE(EXCLUDED.to_peer_type, forward_edges.to_peer_type)
+        RETURNING (xmax = 0) AS inserted
         """,
         (from_peer_id, to_peer_id, from_type, to_type, from_name),
     )
+    edge_row = await edge.fetchone()
+    edge_new = bool(edge_row and edge_row["inserted"])
     inserted = await conn.execute(
         """
         INSERT INTO forward_edge_messages (
@@ -159,6 +162,13 @@ async def persist_forward_occurrence(
     )
     if await inserted.fetchone() is None:
         return False
+    from telegram_snowball.peer_counts import bump_peer_counts
+
+    await bump_peer_counts(
+        conn,
+        from_peer_id,
+        {"total_forwards": 1, **({"unique_forwards": 1} if edge_new else {})},
+    )
     if bump_count:
         await conn.execute(
             """

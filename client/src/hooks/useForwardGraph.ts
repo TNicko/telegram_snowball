@@ -166,10 +166,10 @@ export function useForwardGraph({
         })
     }
     load()
-    const timer = window.setInterval(load, live ? 2000 : 8000)
+    const timer = live ? window.setInterval(load, 2000) : null
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      if (timer != null) window.clearInterval(timer)
     }
   }, [live, includeSharedImages])
 
@@ -196,10 +196,10 @@ export function useForwardGraph({
         })
     }
     load()
-    const timer = window.setInterval(load, live ? 2000 : 8000)
+    const timer = live ? window.setInterval(load, 2000) : null
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      if (timer != null) window.clearInterval(timer)
     }
   }, [live, query, includeSharedImages])
 
@@ -324,10 +324,10 @@ export function useForwardGraph({
         })
     }
     load()
-    const timer = window.setInterval(load, live ? 2000 : 8000)
+    const timer = live ? window.setInterval(load, 2000) : null
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      if (timer != null) window.clearInterval(timer)
     }
   }, [wantedSharedImages, live, peerId, dateFrom, dateTo])
 

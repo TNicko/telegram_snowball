@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type Job } from '../lib/api'
+import { setScrapeLive } from '../lib/liveWork'
 
 const STORAGE_KEY = 'snowball.snowballJobs'
 
@@ -34,9 +35,28 @@ let timer: number | null = null
 let pollGeneration = 0
 let jobsInFlight = false
 
+function snowballLive(jobs: Job[]): boolean {
+  return jobs.some((job) => job.status === 'queued' || job.status === 'running')
+}
+
+function ensureJobPolling() {
+  if (subscribers === 0 || !snowballLive(cached)) {
+    if (timer != null) {
+      window.clearInterval(timer)
+      timer = null
+    }
+    return
+  }
+  if (timer == null) {
+    timer = window.setInterval(() => tick(pollGeneration), 1000)
+  }
+}
+
 function emit(jobs: Job[]) {
   cached = jobs
   writeStoredJobs(jobs)
+  setScrapeLive(snowballLive(cached))
+  ensureJobPolling()
   for (const listener of listeners) listener()
 }
 
@@ -65,14 +85,16 @@ function subscribe() {
     pollGeneration += 1
     const generation = pollGeneration
     tick(generation)
-    timer = window.setInterval(() => tick(generation), 1000)
+    ensureJobPolling()
   }
   return () => {
     subscribers -= 1
-    if (subscribers === 0 && timer != null) {
+    if (subscribers === 0) {
       pollGeneration += 1
-      window.clearInterval(timer)
-      timer = null
+      if (timer != null) {
+        window.clearInterval(timer)
+        timer = null
+      }
     }
   }
 }
