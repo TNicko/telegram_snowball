@@ -10,6 +10,7 @@ Crawl  -  Collect  -  Process  -  Analyse
 <p>
   <a href="#quick-start"><img src="https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="Apache License 2.0"></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue" alt="Linux, macOS, and Windows"></a>
 </p>
 
 </div>
